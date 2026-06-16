@@ -1,0 +1,62 @@
+[
+  {
+    "id": "1",
+    "name": "Jane Doe",
+    "image": "https://i.pravatar.cc/150?u=jane",
+    "area": "E1",
+    "role": "President",
+    "club": "Chennai Speakers",
+    "profession": "Product Manager @ Startup",
+    "icebreaker": "I've run 5 marathons across India.",
+    "linkedin": "https://linkedin.com",
+    "consent": true
+  },
+  {
+    "id": "2",
+    "name": "John Smith",
+    "image": "https://i.pravatar.cc/150?u=john",
+    "area": "E2",
+    "role": "VPE",
+    "club": "Dynamic Toastmasters",
+    "profession": "Senior Software Engineer",
+    "icebreaker": "I lived in Japan for 3 years and speak Japanese.",
+    "linkedin": "https://linkedin.com",
+    "consent": true
+  },
+  {
+    "id": "3",
+    "name": "Alice Johnson",
+    "image": "https://i.pravatar.cc/150?u=alice",
+    "area": "E3",
+    "role": "VPPR",
+    "club": "Elite Communicators",
+    "profession": "Marketing Director",
+    "icebreaker": "I have a pet iguana named Spike.",
+    "linkedin": "https://linkedin.com",
+    "consent": true
+  },
+  {
+    "id": "4",
+    "name": "Bob Brown",
+    "image": "https://i.pravatar.cc/150?u=bob",
+    "area": "E4",
+    "role": "Treasurer",
+    "club": "Chennai Orators",
+    "profession": "Financial Analyst",
+    "icebreaker": "I can play 3 different musical instruments.",
+    "linkedin": "https://linkedin.com",
+    "consent": false
+  },
+  {
+    "id": "5",
+    "name": "Charlie Davis",
+    "image": "https://i.pravatar.cc/150?u=charlie",
+    "area": "E1",
+    "role": "SAA",
+    "club": "Sunrise Toastmasters",
+    "profession": "Event Coordinator & Designer",
+    "icebreaker": "I once cooked a meal for a local celebrity.",
+    "linkedin": "https://linkedin.com",
+    "consent": true
+  }
+]
