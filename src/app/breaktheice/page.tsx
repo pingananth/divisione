@@ -10,6 +10,7 @@ type Attendee = {
   id: string;
   name: string;
   image: string;
+  division: string;
   area: string;
   role: string;
   club: string;
@@ -19,11 +20,13 @@ type Attendee = {
   consent: boolean;
 };
 
-const AREAS = ['All', 'E1', 'E2', 'E3', 'E4'];
-const ROLES = ['All', 'President', 'VPE', 'VPM', 'VPPR', 'Sec', 'Treas', 'SAA'];
+const DIVISIONS = ['All', 'D', 'E', 'G'];
+const AREAS = ['All', 'D1', 'D2', 'E1', 'E2', 'E3', 'E4', 'G1', 'G2'];
+const ROLES = ['All', 'President', 'VPE', 'VPM', 'VPPR', 'Sec', 'Treas', 'SAA', 'Leaders', 'Trainers', 'Role Players'];
 
 export default function BreakTheIce() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDivision, setSelectedDivision] = useState('All');
   const [selectedArea, setSelectedArea] = useState('All');
   const [selectedRole, setSelectedRole] = useState('All');
 
@@ -39,12 +42,13 @@ export default function BreakTheIce() {
         attendee.club.toLowerCase().includes(searchTerm.toLowerCase()) ||
         attendee.profession.toLowerCase().includes(searchTerm.toLowerCase());
         
+      const matchDivision = selectedDivision === 'All' || attendee.division === selectedDivision;
       const matchArea = selectedArea === 'All' || attendee.area === selectedArea;
       const matchRole = selectedRole === 'All' || attendee.role === selectedRole;
 
-      return matchSearch && matchArea && matchRole;
+      return matchSearch && matchDivision && matchArea && matchRole;
     });
-  }, [searchTerm, selectedArea, selectedRole]);
+  }, [searchTerm, selectedDivision, selectedArea, selectedRole]);
 
   const totalConsented = (attendeesData as Attendee[]).filter(a => a.consent).length;
 
@@ -52,7 +56,7 @@ export default function BreakTheIce() {
     <div className="min-h-screen bg-zinc-900 text-zinc-100 font-body flex flex-col relative pb-48">
       {/* 1. Permanent Header & Utility Anchors */}
       <header className="flex justify-between items-center p-4 border-b border-zinc-800 bg-zinc-950">
-        <h1 className="font-heading font-bold text-white tracking-tight">Officers Training Program ( OTP ) Event - 4th July</h1>
+        <h1 className="font-heading font-bold text-white tracking-tight">Division D,E & G - Officers Training Program ( OTP ) Event - 4th July</h1>
         <div className="text-xs text-zinc-400 flex gap-3">
           <Link href="/agenda" className="hover:text-ti-yellow transition-colors">[ Agenda Creator ]</Link>
           <Link href="/minutes" className="hover:text-ti-yellow transition-colors">[ Minutes Tool ]</Link>
@@ -63,7 +67,7 @@ export default function BreakTheIce() {
       <div className="p-4 flex justify-center border-b border-zinc-800/50 bg-zinc-900/50">
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-zinc-800 rounded-full text-sm font-semibold border border-zinc-700">
           <span>💡</span>
-          <span>{totalConsented} Division E Profiles Unlocked</span>
+          <span>{totalConsented} Profiles Unlocked</span>
         </div>
       </div>
 
@@ -152,6 +156,9 @@ export default function BreakTheIce() {
             </a>
           </div>
         </div>
+        <div className="max-w-2xl mx-auto mb-6 text-xs text-zinc-500 leading-relaxed text-justify sm:text-center">
+          <strong>Privacy Policy & Compliance:</strong> The information on this website (including names, club affiliations, and professional details) is for the sole use of Toastmasters&apos; members, for Toastmasters business only. It is not to be used for solicitation and commercial purposes. All personal identifiable information (PII) displayed here has been provided with explicit consent for the Officers Training Program (OTP).
+        </div>
         <p className="mb-4">© {new Date().getFullYear()} Division E, District 229. All rights reserved.</p>
         <div className="flex justify-center gap-4">
           <a href="#" className="hover:text-zinc-300">LinkedIn</a>
@@ -175,6 +182,18 @@ export default function BreakTheIce() {
           />
           
           <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            {/* Division Filter */}
+            <select
+              value={selectedDivision}
+              onChange={(e) => setSelectedDivision(e.target.value)}
+              className="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ti-yellow flex-shrink-0"
+            >
+              <option value="" disabled>Division</option>
+              {DIVISIONS.map(div => (
+                <option key={div} value={div}>{div === 'All' ? 'All Divisions' : `Div ${div}`}</option>
+              ))}
+            </select>
+
             {/* Area Filter */}
             <select
               value={selectedArea}
