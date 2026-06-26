@@ -72,6 +72,9 @@ export default function BreakTheIceClient({ initialAttendees }: { initialAttende
 
       {/* Main Content Area */}
       <main className="flex-1 p-4">
+        <div className="max-w-7xl mx-auto mb-6 bg-zinc-800/30 border border-ti-yellow/20 rounded-lg p-3 text-center text-xs text-zinc-400">
+          If your details are not found in this page, most likely you have not given consent to share the information while registering. Please contact the registration desk.
+        </div>
         {/* 4. The Explicit Attendee Grid */}
         {filteredAttendees.length === 0 ? (
           <div className="text-center text-zinc-500 py-12">No profiles found matching your filters.</div>
