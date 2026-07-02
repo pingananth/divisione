@@ -53,14 +53,7 @@ export default function BreakTheIceClient({ initialAttendees }: { initialAttende
 
   return (
     <div className="min-h-screen bg-zinc-900 text-zinc-100 font-body flex flex-col relative pb-48">
-      {/* 1. Permanent Header & Utility Anchors */}
-      <header className="flex justify-between items-center p-4 border-b border-zinc-800 bg-zinc-950">
-        <h1 className="font-heading font-bold text-white tracking-tight">Division D,E & G - Officers Training Program ( OTP ) Event - 4th July</h1>
-        <div className="text-xs text-zinc-400 flex gap-3">
-          <Link href="/agenda" className="hover:text-ti-yellow transition-colors">[ Agenda Creator ]</Link>
-          <Link href="/minutes" className="hover:text-ti-yellow transition-colors">[ Minutes Tool ]</Link>
-        </div>
-      </header>
+      {/* Removed Local Header in favor of Global Navigation */}
 
       {/* 2. Static Stats Counter */}
       <div className="p-4 flex justify-center border-b border-zinc-800/50 bg-zinc-900/50">
@@ -149,23 +142,6 @@ export default function BreakTheIceClient({ initialAttendees }: { initialAttende
 
       {/* 5. Passive Feedback Footer */}
       <footer className="mt-8 border-t border-zinc-800 bg-zinc-950 p-6 text-center text-sm text-zinc-500 pb-32">
-        <div className="mb-6">
-          <p className="mb-3 text-zinc-400">Did this tool help you break the ice today?</p>
-          <div className="flex justify-center gap-4">
-            <a 
-              href="mailto:pingananth@gmail.com?subject=OTP%20Event%20Tool%20Feedback&body=Yes,%20the%20tool%20was%20helpful!" 
-              className="px-6 py-2 bg-zinc-800 hover:bg-ti-blue text-white rounded-md border border-zinc-700 hover:border-ti-blue transition-colors font-semibold"
-            >
-              Yes
-            </a>
-            <a 
-              href="mailto:pingananth@gmail.com?subject=OTP%20Event%20Tool%20Feedback&body=No,%20the%20tool%20needs%20improvement." 
-              className="px-6 py-2 bg-zinc-800 hover:bg-ti-maroon text-white rounded-md border border-zinc-700 hover:border-ti-maroon transition-colors font-semibold"
-            >
-              No
-            </a>
-          </div>
-        </div>
         <div className="max-w-2xl mx-auto mb-6 text-xs text-zinc-500 leading-relaxed text-justify sm:text-center">
           <strong>Privacy Policy & Compliance:</strong> The information on this website (including names, club affiliations, and professional details) is for the sole use of Toastmasters&apos; members, for Toastmasters business only. It is not to be used for solicitation and commercial purposes. All personal identifiable information (PII) displayed here has been provided with explicit consent for the Officers Training Program (OTP).
         </div>
