@@ -5,13 +5,23 @@ import { toEventConfig } from "./events";
 /**
  * Demo mode: run the whole member-facing flow with no database.
  *
- * Active whenever Supabase is not configured, so `npm run dev` works on a
- * fresh clone and the UI can be reviewed before anyone signs up for anything.
- * Registrations live in memory and vanish on restart — that is the point, not
- * a limitation.
+ * Active in development whenever Supabase is not configured, so `npm run dev`
+ * works on a fresh clone and the UI can be reviewed before anyone signs up for
+ * anything. Registrations live in memory and vanish on restart — that is the
+ * point, not a limitation.
+ *
+ * Deliberately NOT active on a production build by default. A live site that
+ * quietly fell back to an in-memory store would show a "do not pay" banner on
+ * every page of the site, and would take real registrations into nothing. A
+ * misconfigured deploy should fail loudly on the registration routes instead,
+ * leaving the rest of the site untouched.
+ *
+ * Set ALLOW_DEMO_MODE=1 to opt a deployed preview in on purpose.
  */
 export function isDemoMode(): boolean {
-  return !process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL) return false;
+  if (process.env.NODE_ENV === "production") return process.env.ALLOW_DEMO_MODE === "1";
+  return true;
 }
 
 export const DEMO_SLUG = "demo";
