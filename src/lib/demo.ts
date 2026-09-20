@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import type { EventConfig } from "./types";
 import type { RegistrationWithEvent } from "./registrations";
 import { toEventConfig } from "./events";
@@ -62,21 +63,53 @@ type DemoRegistration = {
 };
 
 /**
- * Module-level store. Survives hot reloads via globalThis so a registration
- * made before an edit is still there afterwards.
+ * Demo registrations live in the viewer's own cookie, not in server memory.
+ *
+ * A module-level Map works on a laptop but not on serverless hosting, where
+ * consecutive requests can land on different instances — a member would
+ * register and then get a 404 on the payment page. A cookie follows the
+ * viewer, so the flow holds together wherever this is deployed, and each
+ * visitor gets their own sandbox rather than seeing other people's test data.
  */
-const store: Map<string, DemoRegistration> =
-  (globalThis as { __d229Demo?: Map<string, DemoRegistration> }).__d229Demo ??
-  ((globalThis as { __d229Demo?: Map<string, DemoRegistration> }).__d229Demo = new Map());
+const COOKIE = "d229_demo";
+const MAX_KEPT = 10;
 
-export function demoCreateRegistration(reg: {
+async function read(): Promise<DemoRegistration[]> {
+  const jar = await cookies();
+  const raw = jar.get(COOKIE)?.value;
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as DemoRegistration[]) : [];
+  } catch {
+    // A malformed cookie is a demo inconvenience, never an error worth showing.
+    return [];
+  }
+}
+
+/**
+ * Only callable from a Server Action or Route Handler — Server Components
+ * cannot set cookies.
+ */
+async function write(rows: DemoRegistration[]): Promise<void> {
+  const jar = await cookies();
+  jar.set(COOKIE, JSON.stringify(rows.slice(-MAX_KEPT)), {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24,
+  });
+}
+
+export async function demoCreateRegistration(reg: {
   ticketId: string;
   fullName: string;
   email: string;
   tierId: string;
   amountDuePaise: number;
-}): void {
-  store.set(reg.ticketId, {
+}): Promise<void> {
+  const rows = await read();
+  rows.push({
     id: `demo-${reg.ticketId}`,
     ticketId: reg.ticketId,
     fullName: reg.fullName,
@@ -87,33 +120,35 @@ export function demoCreateRegistration(reg: {
     createdAt: new Date().toISOString(),
     claimedUtr: null,
   });
+  await write(rows);
 }
 
-export function demoGetRegistration(ticketId: string): RegistrationWithEvent | null {
-  const reg = store.get(ticketId);
-  if (!reg) return null;
-  return { ...reg, event: demoEvent() };
+export async function demoGetRegistration(
+  ticketId: string,
+): Promise<RegistrationWithEvent | null> {
+  const reg = (await read()).find((r) => r.ticketId === ticketId);
+  return reg ? { ...reg, event: demoEvent() } : null;
 }
 
 export type DemoClaimResult = { ok: true } | { ok: false; error: string };
 
-export function demoSubmitUtr(ticketId: string, utr: string): DemoClaimResult {
-  const reg = store.get(ticketId);
+export async function demoSubmitUtr(ticketId: string, utr: string): Promise<DemoClaimResult> {
+  const rows = await read();
+  const reg = rows.find((r) => r.ticketId === ticketId);
   if (!reg) return { ok: false, error: "This registration could not be found." };
 
-  // Mirror the real unique-UTR constraint, so the demo shows the same error
-  // a member would actually hit.
-  for (const other of store.values()) {
-    if (other.ticketId !== ticketId && other.claimedUtr === utr) {
-      return {
-        ok: false,
-        error:
-          "That UPI reference has already been used for another registration. " +
-          "Please check the reference in your UPI app, or contact us if you think this is wrong.",
-      };
-    }
+  // Mirror the real unique-UTR constraint, so the demo shows the same error a
+  // member would actually hit.
+  if (rows.some((r) => r.ticketId !== ticketId && r.claimedUtr === utr)) {
+    return {
+      ok: false,
+      error:
+        "That UPI reference has already been used for another registration. " +
+        "Please check the reference in your UPI app, or contact us if you think this is wrong.",
+    };
   }
 
   reg.claimedUtr = utr;
+  await write(rows);
   return { ok: true };
 }

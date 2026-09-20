@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Montserrat, Source_Sans_3 } from "next/font/google";
 import { GoogleAnalytics } from '@next/third-parties/google';
 import Navigation from "@/components/Navigation";
-import { DemoBanner } from "@/components/DemoBanner";
 import "./globals.css";
 
 const montserrat = Montserrat({
@@ -40,7 +39,6 @@ export default function RootLayout({
       className={`${montserrat.variable} ${sourceSans.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-body bg-zinc-900 text-zinc-100">
-        <DemoBanner />
         <Navigation />
         {children}
       </body>

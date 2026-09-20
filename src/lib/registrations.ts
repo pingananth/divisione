@@ -26,7 +26,7 @@ export async function getRegistrationByTicket(
 ): Promise<RegistrationWithEvent | null> {
   if (isDemoMode()) {
     const { demoGetRegistration, DEMO_SLUG } = await import("./demo");
-    return slug === DEMO_SLUG ? demoGetRegistration(ticketId) : null;
+    return slug === DEMO_SLUG ? await demoGetRegistration(ticketId) : null;
   }
 
   const { data, error } = await serviceClient()

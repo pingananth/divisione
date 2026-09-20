@@ -62,7 +62,7 @@ export async function registerAction(
   if (isDemoMode()) {
     const { demoCreateRegistration } = await import("@/lib/demo");
     const ticketId = generateTicketId();
-    demoCreateRegistration({
+    await demoCreateRegistration({
       ticketId,
       fullName: data.fullName,
       email: data.email,

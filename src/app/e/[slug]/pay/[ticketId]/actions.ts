@@ -29,7 +29,7 @@ export async function submitUtrAction(
 
   if (isDemoMode()) {
     const { demoSubmitUtr } = await import("@/lib/demo");
-    const result = demoSubmitUtr(ticketId, parsed.data.utr);
+    const result = await demoSubmitUtr(ticketId, parsed.data.utr);
     if (!result.ok) return { error: result.error };
     redirect(`/e/${slug}/done/${ticketId}`);
   }
