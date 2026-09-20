@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# Template only - placeholders, no secrets. Needed to deploy registration.
+!.env.example
 
 # vercel
 .vercel
