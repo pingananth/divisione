@@ -8,7 +8,7 @@ import type { CustomFieldKey } from "@/lib/types";
 
 const labelClass = "block text-sm font-medium text-zinc-700 dark:text-zinc-300";
 const inputClass =
-  "mt-1 w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700 px-3 py-2 text-base text-zinc-900 shadow-sm placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:text-zinc-400 outline-none focus:border-ti-blue focus:ring-2 focus:ring-ti-blue/20";
+  "mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-base text-zinc-900 shadow-sm placeholder:text-zinc-400 outline-none focus:border-ti-blue focus:ring-2 focus:ring-ti-blue/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500";
 
 function Field({
   name,

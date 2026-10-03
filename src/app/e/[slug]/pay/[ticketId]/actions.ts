@@ -7,6 +7,7 @@ import { serviceClient } from "@/lib/supabase";
 import { outboxKey } from "@/lib/email/outbox";
 import { formatEventDate } from "@/lib/events";
 import { isDemoMode } from "@/lib/demo";
+import { runReconciliation } from "@/lib/reconcile-run";
 
 export type UtrState = { error?: string };
 
@@ -55,6 +56,26 @@ export async function submitUtrAction(
     console.error(`[submitUtr] insert failed for ${ticketId}: ${error.message}`);
     return { error: "Something went wrong saving your reference. Please try again." };
   }
+
+  // Match straight away: if the bank has already reported this payment, the
+  // member is confirmed before the page even loads. A failure here must never
+  // cost the member their submission — the scheduled run will pick it up.
+  let confirmedNow = false;
+  try {
+    await runReconciliation(registration.event.id, { trigger: "utr_submitted" });
+    const { data: after } = await db
+      .from("registrations")
+      .select("status")
+      .eq("id", registration.id)
+      .single();
+    confirmedNow = after?.status === "confirmed";
+  } catch (err) {
+    console.error(`[submitUtr] immediate matching failed for ${ticketId}:`, err);
+  }
+
+  // Already confirmed means the confirmation email is queued; a "we're
+  // checking your payment" email on top of it would only confuse.
+  if (confirmedNow) redirect(`/e/${slug}/done/${ticketId}`);
 
   // Queue the acknowledgement. Enqueuing rather than sending inline means a
   // provider outage cannot cost the member their submission.

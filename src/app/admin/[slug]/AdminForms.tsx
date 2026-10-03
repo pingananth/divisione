@@ -35,7 +35,7 @@ function Submit({ idle, busy, className }: { idle: string; busy: string; classNa
 const primaryButton =
   "rounded-lg bg-ti-maroon px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60";
 const secondaryButton =
-  "rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700 px-3 py-1.5 text-sm font-medium shadow-sm transition hover:bg-zinc-50 dark:hover:bg-zinc-700 disabled:opacity-60";
+  "rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-700";
 
 export function UploadStatementForm({ slug }: { slug: string }) {
   const action = uploadStatementAction.bind(null, slug);
@@ -103,7 +103,7 @@ export function ReviewForm({
           id={`note-${registrationId}`}
           name="note"
           placeholder="Note (emailed to the member if you reject)"
-          className="min-w-0 flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700 px-3 py-1.5 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:text-zinc-400 outline-none focus:border-ti-blue focus:ring-2 focus:ring-ti-blue/20"
+          className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 outline-none focus:border-ti-blue focus:ring-2 focus:ring-ti-blue/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500"
         />
         <button
           type="submit"

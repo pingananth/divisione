@@ -1,5 +1,7 @@
 -- Seed one conference. Copy this block per Division, changing the slug, title,
--- dates, VPA and ref_prefix.
+-- dates, VPA, ref_prefix and account_last4.
+--
+-- Run supabase/migrations/0001_init.sql and 0002_bank_credits.sql first.
 --
 -- Amounts are INTEGER PAISE: 30000 = ₹300.
 -- Cutoffs are ISO-8601 with the IST offset, so they mean what an organiser
@@ -7,7 +9,7 @@
 
 insert into events (
   slug, title, venue, starts_at, ends_at,
-  upi_vpa, upi_payee_name, ref_prefix,
+  upi_vpa, upi_payee_name, ref_prefix, account_last4,
   tiers, enabled_fields, support_email, registration_open
 ) values (
   'division-e-2026',
@@ -19,6 +21,9 @@ insert into events (
   'CHANGE-ME@okhdfcbank',
   'Division E Conference',
   'E',
+  -- Last 4 digits of the bank account the VPA pays into. Bank alerts and
+  -- statements are matched to this conference through it.
+  '0000',
 
   '[
     {"id":"early","label":"Early bird","amountPaise":25000,"endsAt":"2026-09-25T23:59:59+05:30"},

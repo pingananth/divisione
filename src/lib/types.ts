@@ -70,10 +70,29 @@ export type StatementRow = {
   narration: string;
 };
 
+/**
+ * A credit as the matching rules see it — a statement row plus what we know
+ * about where and when it landed. The extra fields are optional because a
+ * CSV statement gives a date but no time, while a bank alert gives both.
+ */
+export type Credit = StatementRow & {
+  /** Last 4 digits of the receiving account, when known. */
+  accountLast4?: string | null;
+  /** Exact instant the bank credited it (ISO-8601), when the source gives one. */
+  creditedAt?: string | null;
+  source?: "csv" | "email";
+};
+
 export type PaymentClaim = {
   registrationId: string;
   /** 12-digit UTR/RRN as submitted by the attendee, already normalised. */
   utr: string;
   /** What this registration owes, integer paise. */
   expectedAmountPaise: number;
+  /** Last 4 digits of the account this event collects into. */
+  accountLast4?: string | null;
+  /** When the registration was created (ISO-8601). Older payments are suspect. */
+  registeredAt?: string;
+  /** When the member submitted this UTR (ISO-8601). Drives the wait window. */
+  claimedAt?: string;
 };

@@ -107,19 +107,48 @@ export function priceRegistration(
   };
 }
 
+/**
+ * Explain why a pasted value is not a UTR, naming the specific app ID people
+ * most often copy by mistake. Returns null when the value looks like a UTR.
+ *
+ * UPI apps show more than one ID per payment and the wrong one is usually more
+ * prominent: PhonePe leads with its own "Transaction ID" (T + ~20 digits) and
+ * Google Pay shows a "Google transaction ID" (starts CIC...). Neither appears
+ * in the bank's records, so they can never be matched.
+ */
+export function explainBadUtr(input: string): string | null {
+  const trimmed = input.trim();
+  const compact = trimmed.replace(/\s+/g, "");
+
+  // App-specific IDs first: a real UTR never starts with T or CIC, so these are
+  // rejected even in the unlucky case their digits happen to total twelve.
+  if (/^T\d{15,}$/i.test(compact)) {
+    return "That's PhonePe's Transaction ID. Please enter the 12-digit UTR shown just below it.";
+  }
+  if (/^CIC/i.test(compact)) {
+    return "That's the Google transaction ID. Please enter the 12-digit UPI transaction ID instead.";
+  }
+
+  // Accept anything that reduces to exactly 12 digits, so "UTR: 4123 4567 8901"
+  // still works.
+  if (trimmed.replace(/\D/g, "").length === 12) return null;
+
+  if (/[a-z]/i.test(compact.replace(/^(utr|rrn|upi\s*ref(\s*no)?)[:.\-\s]*/i, ""))) {
+    return "A UPI reference has only numbers — 12 digits. Check the payment details in your UPI app.";
+  }
+  return "A UPI reference is exactly 12 digits — check your UPI app's transaction details.";
+}
+
 export const utrSchema = z.object({
   utr: z
     .string()
     .trim()
     .transform((v, ctx) => {
-      const digits = v.replace(/\D/g, "");
-      if (digits.length !== 12) {
-        ctx.addIssue({
-          code: "custom",
-          message: "A UPI reference is exactly 12 digits — check your UPI app's transaction details",
-        });
+      const problem = explainBadUtr(v);
+      if (problem) {
+        ctx.addIssue({ code: "custom", message: problem });
         return z.NEVER;
       }
-      return digits;
+      return v.replace(/\D/g, "");
     }),
 });

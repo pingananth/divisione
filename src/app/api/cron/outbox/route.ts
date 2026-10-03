@@ -1,37 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 import { serviceClient } from "@/lib/supabase";
 import { createEmailProvider } from "@/lib/email";
 import { supabaseOutboxStore } from "@/lib/email/supabase-store";
 import { processOutbox } from "@/lib/email/outbox";
+import { rejectUnlessCron } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** Constant-time comparison, so the secret cannot be recovered by timing. */
-function secretMatches(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
 /**
- * Drain the email outbox. Invoked on a schedule (Vercel Cron) and also by the
+ * Drain the email outbox. Invoked on a schedule (Netlify scheduled function) and also by the
  * admin "send now" button, so a confirmation never waits on the next tick.
  */
 export async function GET(request: NextRequest) {
-  const expected = process.env.CRON_SECRET;
-  if (!expected) {
-    return NextResponse.json({ error: "CRON_SECRET is not configured" }, { status: 500 });
-  }
-
-  // Vercel Cron sends "Authorization: Bearer <CRON_SECRET>".
-  const header = request.headers.get("authorization") ?? "";
-  const provided = header.startsWith("Bearer ") ? header.slice(7) : "";
-
-  if (!secretMatches(provided, expected)) {
-    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-  }
+  const rejected = rejectUnlessCron(request);
+  if (rejected) return rejected;
 
   try {
     const provider = createEmailProvider();

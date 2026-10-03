@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/supabase-server";
 import { isDemoMode } from "@/lib/demo";
 import { DemoAdminNotice } from "@/components/DemoAdminNotice";
 import { formatPaise } from "@/lib/pricing";
+import { REVIEW_KINDS, type OutcomeKind } from "@/lib/reconcile";
 import { formatEventDate } from "@/lib/events";
 import { UploadStatementForm, ReconcileButton, ReviewForm } from "./AdminForms";
 
@@ -20,6 +21,8 @@ type RegistrationRow = {
   status: "pending" | "confirmed" | "rejected";
   review_note: string | null;
   created_at: string;
+  match_status: OutcomeKind | null;
+  match_detail: string | null;
   payment_claims: { utr: string; matched_at: string | null }[] | null;
 };
 
@@ -48,7 +51,7 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
   // RLS returns nothing unless this organiser runs this event.
   const { data: event, error: eventError } = await db
     .from("events")
-    .select("id, title, venue, starts_at, upi_vpa, registration_open")
+    .select("id, title, venue, starts_at, upi_vpa, registration_open, account_last4")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -59,14 +62,16 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
     db
       .from("registrations")
       .select(
-        "id, ticket_id, full_name, email, phone, club, amount_due_paise, status, review_note, created_at, payment_claims(utr, matched_at)",
+        "id, ticket_id, full_name, email, phone, club, amount_due_paise, status, review_note, created_at, match_status, match_detail, payment_claims(utr, matched_at)",
       )
       .eq("event_id", event.id)
       .order("created_at", { ascending: false }),
-    db
-      .from("statement_rows")
-      .select("id", { count: "exact", head: true })
-      .eq("event_id", event.id),
+    event.account_last4
+      ? db
+          .from("bank_credits")
+          .select("id", { count: "exact", head: true })
+          .eq("account_last4", event.account_last4)
+      : Promise.resolve({ count: 0 }),
   ]);
 
   if (regError) throw new Error(`Failed to load registrations: ${regError.message}`);
@@ -74,9 +79,15 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
 
   const confirmed = registrations.filter((r) => r.status === "confirmed");
   const pending = registrations.filter((r) => r.status === "pending");
-  // Pending registrations that submitted a reference are the ones reconciliation
-  // could not clear — the exception tail an organiser actually has to work.
-  const awaitingReview = pending.filter((r) => r.payment_claims?.[0]?.utr);
+  const submitted = pending.filter((r) => r.payment_claims?.[0]?.utr);
+  // Only decisions the rules refused to make reach a human. Everything else
+  // that has a reference is simply waiting for the bank to report it.
+  const awaitingReview = submitted.filter(
+    (r) => r.match_status !== null && REVIEW_KINDS.has(r.match_status),
+  );
+  const waitingForBank = submitted.filter(
+    (r) => r.match_status === null || !REVIEW_KINDS.has(r.match_status),
+  );
   const awaitingPayment = pending.filter((r) => !r.payment_claims?.[0]?.utr);
   const collectedPaise = confirmed.reduce((sum, r) => sum + r.amount_due_paise, 0);
 
@@ -99,25 +110,35 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
         </a>
       </div>
 
-      <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {!event.account_last4 ? (
+        <p className="mt-6 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
+          No collecting account is set for this conference, so payments cannot be matched. Ask the
+          District admin to add the last 4 digits of the bank account.
+        </p>
+      ) : null}
+
+      <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Stat label="Confirmed" value={String(confirmed.length)} tone="text-emerald-700 dark:text-emerald-300" />
-        <Stat label="Needs review" value={String(awaitingReview.length)} tone="text-amber-700" />
-        <Stat label="Awaiting payment" value={String(awaitingPayment.length)} />
+        <Stat label="Needs review" value={String(awaitingReview.length)} tone="text-amber-700 dark:text-amber-300" />
+        <Stat label="Waiting for bank" value={String(waitingForBank.length)} />
+        <Stat label="Not paid yet" value={String(awaitingPayment.length)} />
         <Stat label="Collected" value={formatPaise(collectedPaise)} />
       </section>
 
       <section className="mt-6 rounded-2xl bg-white ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700 p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">Reconcile</h2>
+        <h2 className="text-lg font-semibold">Payments</h2>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          {creditCount ?? 0} bank credit{creditCount === 1 ? "" : "s"} loaded so far.
+          {creditCount ?? 0} bank credit{creditCount === 1 ? "" : "s"} loaded
+          {event.account_last4 ? ` for the account ending ${event.account_last4}` : ""}. Matching
+          runs on its own whenever a member submits a reference, after every upload, and every few
+          minutes.
         </p>
         <div className="mt-4 border-t border-zinc-200 dark:border-zinc-700 pt-4">
           <UploadStatementForm slug={slug} />
         </div>
         <div className="mt-6 border-t border-zinc-200 dark:border-zinc-700 pt-4">
           <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
-            Matches submitted references against loaded credits and confirms the exact matches.
-            Safe to run as often as you like.
+            You should rarely need this — it runs the same matching on demand.
           </p>
           <ReconcileButton slug={slug} />
         </div>
@@ -127,8 +148,8 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
         <section className="mt-6 rounded-2xl bg-white ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700 p-6 shadow-sm">
           <h2 className="text-lg font-semibold">Needs review ({awaitingReview.length})</h2>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            These submitted a reference that did not match a credit exactly. Check the reference
-            against your bank before confirming.
+            The rules would not confirm these on their own. The reason is shown on each — check it
+            against your bank before deciding.
           </p>
           <ul className="mt-4 divide-y divide-zinc-200 dark:divide-zinc-700">
             {awaitingReview.map((r) => (
@@ -143,6 +164,11 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
                     <span className="font-mono">{r.payment_claims?.[0]?.utr}</span>
                   </span>
                 </div>
+                {r.match_detail ? (
+                  <p className="mt-1 text-sm font-medium text-amber-800 dark:text-amber-200">
+                    {r.match_detail}
+                  </p>
+                ) : null}
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
                   {r.email} · {r.phone}
                 </p>

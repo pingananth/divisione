@@ -11,11 +11,28 @@ against the bank statement automatically instead of by checking Google Pay scree
 2. They get a UPI QR and deep link with the exact amount pre-filled, and pay from their own UPI app.
    Money lands directly in the Division's account, instantly, at zero fee.
 3. They enter the 12-digit **UTR/RRN** from their UPI app. The registration sits as `pending`.
-4. An organiser uploads the bank statement CSV at `/admin/<slug>` and clicks **Match payments now**.
-   Claims whose reference *and* amount match a real credit are confirmed automatically, and the
-   member is emailed.
-5. Only the exception tail — wrong amount, reused reference, reference not in the statement —
-   reaches a human.
+4. The bank reports the payment — today by an organiser uploading the statement CSV at
+   `/admin/<slug>`. Matching then runs on its own: after every UTR submission, after every upload,
+   and every 5 minutes. No "match" click is needed.
+5. Plain rules decide each payment. Only the exception tail reaches a human.
+
+## The matching rules
+
+Checked in order; the first that applies wins. Code: `src/lib/reconcile.ts`. No AI is involved —
+the same inputs always give the same answer.
+
+| # | Situation | Result |
+| --- | --- | --- |
+| 1 | Same UTR claimed by 2+ registrations | Needs review |
+| 2 | No credit yet, UTR submitted under 24 h ago | Waiting |
+| 2 | No credit yet, 24 h or more | Needs review |
+| 3 | Credit went to a different account | Needs review |
+| 4 | Amount paid ≠ amount due | Needs review |
+| 5 | Paid before the registration existed | Needs review |
+| 6 | Everything matches | Confirmed, member emailed |
+
+Rule 5 only applies when the bank source gives an exact time (bank alerts do, CSV statements do
+not). The dashboard shows the reason on every item that needs review.
 
 The bank statement is the only source of truth. A mistyped or invented reference never clears, with
 no organiser judgement required. That is stricter than trusting a screenshot.
@@ -42,8 +59,12 @@ CSV export and the email queue).
 Create a free Supabase project. In its SQL editor run, in order:
 
 - `supabase/migrations/0001_init.sql`
-- `supabase/seed.sql` — edit it first: one block per conference, with the real UPI ID, dates and
-  prices.
+- `supabase/migrations/0002_bank_credits.sql`
+- `supabase/seed.sql` — edit it first: one block per conference, with the real UPI ID, dates,
+  prices and **`account_last4`** (last 4 digits of the bank account the UPI ID pays into).
+
+Every conference needs `account_last4`. Without it, statements cannot be uploaded and payments
+cannot be matched — the dashboard says so.
 
 ### 2. Environment variables (Netlify → Site configuration → Environment variables)
 
@@ -78,8 +99,9 @@ Confirmation emails are queued, not sent inline, so a provider outage or a rate 
 rather than losing them or stalling a matching run.
 
 `netlify/functions/outbox-cron.mts` drains the queue every 10 minutes by calling
-`/api/cron/outbox`. **Netlify only runs scheduled functions on a deployed production site** — it
-never fires locally.
+`/api/cron/outbox`. `netlify/functions/reconcile-cron.mts` re-runs matching every 5 minutes via
+`/api/cron/reconcile`, which is what moves a claim from "waiting" to "needs review" after 24 hours.
+**Netlify only runs scheduled functions on a deployed production site** — they never fire locally.
 
 ## Before the first conference: the ₹1 smoke test
 
@@ -113,8 +135,8 @@ common HDFC and ICICI shapes; an unusual bank may need its header patterns added
 | --- | --- |
 | `src/lib/pricing.ts` | Tier selection by date, money formatting |
 | `src/lib/upi.ts` | UPI intent URLs, VPA and UTR validation |
-| `src/lib/reconcile.ts` | The matching engine — pure, idempotent, heavily tested |
-| `src/lib/reconcile-run.ts` | Applies results: confirms, queues emails, records the run |
+| `src/lib/reconcile.ts` | The matching rules — pure, idempotent, heavily tested |
+| `src/lib/reconcile-run.ts` | Applies results: confirms, stores decisions, queues emails, records the run |
 | `src/lib/statements/` | Bank CSV reader and column auto-detection |
 | `src/lib/email/` | Provider interface, adapters, templates, retrying outbox |
 | `src/lib/demo.ts` | In-memory backend for demo mode |

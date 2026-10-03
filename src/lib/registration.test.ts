@@ -4,6 +4,7 @@ import {
   registrationSchema,
   priceRegistration,
   utrSchema,
+  explainBadUtr,
 } from "./registration";
 import type { PriceTier } from "./types";
 
@@ -139,5 +140,50 @@ describe("utrSchema", () => {
     const r = utrSchema.safeParse({ utr: "12345" });
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error.issues[0].message).toMatch(/exactly 12 digits/);
+  });
+});
+
+describe("explainBadUtr", () => {
+  const msg = (v: string) => {
+    const r = utrSchema.safeParse({ utr: v });
+    return r.success ? null : r.error.issues[0].message;
+  };
+
+  it("accepts a plain 12-digit UTR", () => {
+    expect(explainBadUtr("412345678901")).toBeNull();
+  });
+
+  it("accepts a UTR pasted with a label and spaces", () => {
+    expect(explainBadUtr("UTR: 4123 4567 8901")).toBeNull();
+    expect(explainBadUtr("UPI Ref No 412345678901")).toBeNull();
+  });
+
+  it("names PhonePe's Transaction ID when that is pasted", () => {
+    expect(msg("T2510031234567890123456")).toMatch(/PhonePe's Transaction ID/);
+  });
+
+  it("names PhonePe's ID case-insensitively and with spaces", () => {
+    expect(msg(" t2510031234567890123456 ")).toMatch(/PhonePe/);
+  });
+
+  it("names the Google transaction ID when that is pasted", () => {
+    expect(msg("CICAgKDt4qTqWQ")).toMatch(/Google transaction ID/);
+  });
+
+  it("rejects an app ID even when its digits happen to total twelve", () => {
+    expect(msg("CIC123456789012")).toMatch(/Google transaction ID/);
+  });
+
+  it("says numbers only for other letter-bearing input", () => {
+    expect(msg("ABC12345")).toMatch(/only numbers/);
+  });
+
+  it("falls back to the length message for too few digits", () => {
+    expect(msg("41234567")).toMatch(/exactly 12 digits/);
+  });
+
+  it("still normalises a good UTR to digits only", () => {
+    const r = utrSchema.safeParse({ utr: "UTR: 4123-4567-8901" });
+    expect(r.success && r.data.utr).toBe("412345678901");
   });
 });

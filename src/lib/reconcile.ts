@@ -1,11 +1,23 @@
-import type { PaymentClaim, StatementRow } from "./types";
+import type { Credit, PaymentClaim } from "./types";
+
+/**
+ * How long a submitted UTR may go unmatched before a human is asked to look.
+ * Bank alerts land in minutes and statements daily, so a day covers both.
+ */
+export const WAIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Tolerance for clock differences between the bank and our server. A credit
+ * this far before the registration was created is still treated as fresh.
+ */
+export const CLOCK_SKEW_MS = 15 * 60 * 1000;
 
 export type MatchOutcome =
   | {
       kind: "confirmed";
       registrationId: string;
       utr: string;
-      row: StatementRow;
+      row: Credit;
     }
   | {
       kind: "amount_mismatch";
@@ -13,7 +25,7 @@ export type MatchOutcome =
       utr: string;
       expectedAmountPaise: number;
       creditedAmountPaise: number;
-      row: StatementRow;
+      row: Credit;
     }
   | {
       kind: "duplicate_claim";
@@ -23,46 +35,104 @@ export type MatchOutcome =
       claimedBy: string[];
     }
   | {
+      kind: "wrong_account";
+      registrationId: string;
+      utr: string;
+      expectedAccount: string;
+      creditedAccount: string;
+      row: Credit;
+    }
+  | {
+      kind: "stale_payment";
+      registrationId: string;
+      utr: string;
+      creditedAt: string;
+      registeredAt: string;
+      row: Credit;
+    }
+  | {
+      /** UTR submitted, bank has not reported it yet, still inside the window. */
+      kind: "waiting";
+      registrationId: string;
+      utr: string;
+    }
+  | {
+      /** UTR submitted and the window has passed with no matching credit. */
       kind: "unmatched";
       registrationId: string;
       utr: string;
     };
 
+export type OutcomeKind = MatchOutcome["kind"];
+
+/** Outcomes a human must look at. `waiting` and `confirmed` are not here. */
+export const REVIEW_KINDS: ReadonlySet<OutcomeKind> = new Set<OutcomeKind>([
+  "amount_mismatch",
+  "duplicate_claim",
+  "wrong_account",
+  "stale_payment",
+  "unmatched",
+]);
+
 export type ReconcileResult = {
   outcomes: MatchOutcome[];
-  /** Credits present in the statement that no registration claimed. */
-  unclaimedCredits: StatementRow[];
+  /** Credits that no registration claimed. */
+  unclaimedCredits: Credit[];
 };
 
 export type ReconcileInput = {
   /** Claims from registrations that are still pending. */
   claims: PaymentClaim[];
-  /** Credit rows parsed from one or more bank statement uploads. */
-  statement: StatementRow[];
+  /** Credits from bank statements and/or bank alerts. */
+  statement: Credit[];
+  /**
+   * UTRs already claimed anywhere — including registrations already confirmed,
+   * or belonging to another event on the same account. Excluded from
+   * `unclaimedCredits`, which would otherwise fill with money that is
+   * perfectly well accounted for.
+   */
+  knownClaimedUtrs?: ReadonlySet<string>;
+  /** Reference time for the wait window. Defaults to now. */
+  now?: Date;
 };
 
 /**
- * Match pending payment claims against bank statement credits.
+ * Decide what happens to each pending payment claim.
  *
- * The bank statement is the only source of truth. A claim confirms only when
- * its UTR appears as a real credit for exactly the expected amount — so a
- * mistyped or invented UTR simply never clears, with no organiser judgement
- * required.
+ * Plain rules, checked in this order — the first that applies wins:
  *
- * Two registrations claiming the same UTR are both held for review rather than
- * one being confirmed arbitrarily. That is the shape of both an honest mistake
- * (a member registering twice) and the obvious abuse (sharing one payment
- * reference), and a human should decide which it is.
+ *   1. Same UTR claimed by 2+ registrations      → duplicate_claim (review)
+ *   2. No credit for the UTR yet:
+ *        claimed under 24 h ago                  → waiting
+ *        claimed 24 h+ ago (or time unknown)     → unmatched (review)
+ *   3. Credit went to a different account        → wrong_account (review)
+ *   4. Credited amount ≠ amount due              → amount_mismatch (review)
+ *   5. Credited before the registration existed  → stale_payment (review)
+ *   6. Everything matches                        → confirmed
  *
- * Pure and idempotent: pass only still-pending claims and running it repeatedly
- * over the same statement yields the same outcomes and confirms nothing twice.
+ * The bank is the only source of truth. A claim confirms only when its UTR is a
+ * real credit, to the right account, for exactly the amount due, made after
+ * the member registered — so an invented, mistyped or recycled UTR never
+ * clears on its own.
+ *
+ * Checks that need data a source does not provide are skipped rather than
+ * failed: a CSV statement has no credit time, so rule 5 only applies to
+ * sources that give one. Every other rule always applies.
+ *
+ * Pure and idempotent: pass only still-pending claims and running it
+ * repeatedly over the same inputs yields the same outcomes.
  */
-export function reconcile({ claims, statement }: ReconcileInput): ReconcileResult {
-  const byUtr = new Map<string, StatementRow[]>();
+export function reconcile({
+  claims,
+  statement,
+  knownClaimedUtrs,
+  now = new Date(),
+}: ReconcileInput): ReconcileResult {
+  const byUtr = new Map<string, Credit>();
   for (const row of statement) {
-    const existing = byUtr.get(row.utr);
-    if (existing) existing.push(row);
-    else byUtr.set(row.utr, [row]);
+    // UTRs are unique across the UPI network; a repeat is the same credit
+    // reported twice (an alert and a statement row), so keep the first.
+    if (!byUtr.has(row.utr)) byUtr.set(row.utr, row);
   }
 
   // Claims sharing a UTR are all suspect, so index them before deciding anything.
@@ -73,67 +143,104 @@ export function reconcile({ claims, statement }: ReconcileInput): ReconcileResul
     else claimantsByUtr.set(claim.utr, [claim.registrationId]);
   }
 
-  const outcomes: MatchOutcome[] = [];
-  const claimedUtrs = new Set<string>();
+  const outcomes: MatchOutcome[] = claims.map((claim) =>
+    decide(claim, claimantsByUtr.get(claim.utr) ?? [claim.registrationId], byUtr, now),
+  );
 
-  for (const claim of claims) {
-    const claimants = claimantsByUtr.get(claim.utr) ?? [claim.registrationId];
-
-    if (claimants.length > 1) {
-      outcomes.push({
-        kind: "duplicate_claim",
-        registrationId: claim.registrationId,
-        utr: claim.utr,
-        claimedBy: [...claimants],
-      });
-      claimedUtrs.add(claim.utr);
-      continue;
-    }
-
-    const rows = byUtr.get(claim.utr);
-    if (!rows || rows.length === 0) {
-      outcomes.push({
-        kind: "unmatched",
-        registrationId: claim.registrationId,
-        utr: claim.utr,
-      });
-      continue;
-    }
-
-    claimedUtrs.add(claim.utr);
-    const row = rows[0];
-
-    if (row.amountPaise === claim.expectedAmountPaise) {
-      outcomes.push({
-        kind: "confirmed",
-        registrationId: claim.registrationId,
-        utr: claim.utr,
-        row,
-      });
-    } else {
-      outcomes.push({
-        kind: "amount_mismatch",
-        registrationId: claim.registrationId,
-        utr: claim.utr,
-        expectedAmountPaise: claim.expectedAmountPaise,
-        creditedAmountPaise: row.amountPaise,
-        row,
-      });
-    }
-  }
-
-  const unclaimedCredits = statement.filter((row) => !claimedUtrs.has(row.utr));
+  const claimedUtrs = new Set(claims.map((c) => c.utr));
+  const unclaimedCredits = [...byUtr.values()].filter(
+    (row) => !claimedUtrs.has(row.utr) && !knownClaimedUtrs?.has(row.utr),
+  );
 
   return { outcomes, unclaimedCredits };
 }
 
+function decide(
+  claim: PaymentClaim,
+  claimants: string[],
+  byUtr: Map<string, Credit>,
+  now: Date,
+): MatchOutcome {
+  const base = { registrationId: claim.registrationId, utr: claim.utr };
+
+  // Rule 1
+  if (claimants.length > 1) {
+    return { ...base, kind: "duplicate_claim", claimedBy: [...claimants] };
+  }
+
+  // Rule 2
+  const row = byUtr.get(claim.utr);
+  if (!row) {
+    const claimedAt = claim.claimedAt ? Date.parse(claim.claimedAt) : NaN;
+    const stillWaiting =
+      Number.isFinite(claimedAt) && now.getTime() - claimedAt < WAIT_WINDOW_MS;
+    return { ...base, kind: stillWaiting ? "waiting" : "unmatched" };
+  }
+
+  // Rule 3
+  if (claim.accountLast4 && row.accountLast4 && claim.accountLast4 !== row.accountLast4) {
+    return {
+      ...base,
+      kind: "wrong_account",
+      expectedAccount: claim.accountLast4,
+      creditedAccount: row.accountLast4,
+      row,
+    };
+  }
+
+  // Rule 4
+  if (row.amountPaise !== claim.expectedAmountPaise) {
+    return {
+      ...base,
+      kind: "amount_mismatch",
+      expectedAmountPaise: claim.expectedAmountPaise,
+      creditedAmountPaise: row.amountPaise,
+      row,
+    };
+  }
+
+  // Rule 5
+  if (row.creditedAt && claim.registeredAt) {
+    const credited = Date.parse(row.creditedAt);
+    const registered = Date.parse(claim.registeredAt);
+    if (
+      Number.isFinite(credited) &&
+      Number.isFinite(registered) &&
+      credited < registered - CLOCK_SKEW_MS
+    ) {
+      return {
+        ...base,
+        kind: "stale_payment",
+        creditedAt: row.creditedAt,
+        registeredAt: claim.registeredAt,
+        row,
+      };
+    }
+  }
+
+  // Rule 6
+  return { ...base, kind: "confirmed", row };
+}
+
 /** Convenience counts for the organiser dashboard. */
 export function summarise(result: ReconcileResult) {
-  const counts = { confirmed: 0, amount_mismatch: 0, duplicate_claim: 0, unmatched: 0 };
+  const counts: Record<OutcomeKind, number> = {
+    confirmed: 0,
+    amount_mismatch: 0,
+    duplicate_claim: 0,
+    wrong_account: 0,
+    stale_payment: 0,
+    waiting: 0,
+    unmatched: 0,
+  };
   for (const o of result.outcomes) counts[o.kind]++;
+
+  let needsReview = 0;
+  for (const kind of REVIEW_KINDS) needsReview += counts[kind];
+
   return {
     ...counts,
-    needsReview: counts.amount_mismatch + counts.duplicate_claim + counts.unmatched,
+    needsReview,
     unclaimedCredits: result.unclaimedCredits.length,
   };
 }

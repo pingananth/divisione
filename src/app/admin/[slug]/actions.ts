@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/supabase-server";
 import { serviceClient } from "@/lib/supabase";
 import { parseStatement } from "@/lib/statements";
-import { runReconciliation } from "@/lib/reconcile-run";
+import {
+  runReconciliation,
+  AccountNotConfiguredError,
+  type RunSummary,
+} from "@/lib/reconcile-run";
 import { outboxKey } from "@/lib/email/outbox";
 import { formatEventDate } from "@/lib/events";
 
@@ -23,7 +27,7 @@ async function authorise(slug: string) {
 
   const { data, error } = await db
     .from("events")
-    .select("id, title, venue, starts_at, support_email")
+    .select("id, title, venue, starts_at, support_email, account_last4")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -63,6 +67,15 @@ export async function uploadStatementAction(
     };
   }
 
+  const accountLast4 = auth.event.account_last4 as string | null;
+  if (!accountLast4) {
+    return {
+      error:
+        "This conference has no collecting account set yet. Ask the District admin to add " +
+        "the last 4 digits of the bank account before uploading statements.",
+    };
+  }
+
   const db = serviceClient();
 
   const { data: upload, error: uploadError } = await db
@@ -79,31 +92,74 @@ export async function uploadStatementAction(
 
   if (uploadError) return { error: `Could not record the upload: ${uploadError.message}` };
 
-  // Re-uploading an overlapping date range is normal and must not duplicate
-  // credits, so conflicting rows are ignored rather than rejected.
-  const { error: rowsError } = await db.from("statement_rows").upsert(
+  const uploadedAt = new Date().toISOString();
+
+  // UTRs are unique, so overlapping date ranges and credits already learned
+  // from a bank alert are both skipped rather than duplicated.
+  const { error: rowsError } = await db.from("bank_credits").upsert(
     parsed.rows.map((r) => ({
-      upload_id: upload.id,
-      event_id: auth.event.id,
+      account_last4: accountLast4,
       utr: r.utr,
       amount_paise: r.amountPaise,
       value_date: r.valueDate,
       narration: r.narration,
+      source: "csv",
+      source_ref: upload.id,
+      seen_in_statement_at: uploadedAt,
     })),
-    { onConflict: "event_id,utr,amount_paise", ignoreDuplicates: true },
+    { onConflict: "utr", ignoreDuplicates: true },
   );
 
   if (rowsError) return { error: `Could not save the statement rows: ${rowsError.message}` };
 
-  revalidatePath(`/admin/${slug}`);
+  // Credits first learned from a bank alert are now confirmed by the
+  // statement too. Any alert credit that never gets this stamp is suspect.
+  // Batched: the filter travels in the request URL, and a month's statement
+  // can hold far more UTRs than a URL comfortably carries.
+  const utrs = parsed.rows.map((r) => r.utr);
+  for (let i = 0; i < utrs.length; i += 200) {
+    const { error: seenError } = await db
+      .from("bank_credits")
+      .update({ seen_in_statement_at: uploadedAt })
+      .in("utr", utrs.slice(i, i + 200))
+      .is("seen_in_statement_at", null);
+    if (seenError) {
+      console.error(`[admin/${slug}] failed to mark credits seen: ${seenError.message}`);
+    }
+  }
 
   const skippedNote = parsed.skipped.length
     ? ` ${parsed.skipped.length} credit${parsed.skipped.length === 1 ? "" : "s"} had no UPI reference and ${parsed.skipped.length === 1 ? "was" : "were"} left out.`
     : "";
 
+  // Matching runs straight away — no second click needed.
+  let matchNote = "";
+  try {
+    const summary = await runReconciliation(auth.event.id, {
+      runBy: auth.userId,
+      trigger: "statement_upload",
+    });
+    matchNote = ` ${describeRun(summary)}`;
+  } catch (err) {
+    console.error(`[admin/${slug}] matching after upload failed:`, err);
+    matchNote = " Matching could not run — use \"Match payments now\" to retry.";
+  }
+
+  revalidatePath(`/admin/${slug}`);
+
   return {
-    message: `Read ${parsed.rows.length} UPI credit${parsed.rows.length === 1 ? "" : "s"} from ${file.name}.${skippedNote}`,
+    message: `Read ${parsed.rows.length} UPI credit${parsed.rows.length === 1 ? "" : "s"} from ${file.name}.${skippedNote}${matchNote}`,
   };
+}
+
+function describeRun(summary: RunSummary): string {
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  return (
+    `Confirmed ${summary.confirmed}. ` +
+    `${plural(summary.needsReview, "needs", "need")} review. ` +
+    `${plural(summary.waiting, "is", "are")} still waiting for the bank. ` +
+    `${plural(summary.unclaimedCredits, "credit", "credits")} unclaimed.`
+  );
 }
 
 export async function reconcileAction(slug: string): Promise<ActionState> {
@@ -111,17 +167,16 @@ export async function reconcileAction(slug: string): Promise<ActionState> {
   if ("error" in auth) return { error: auth.error };
 
   try {
-    const { summary } = await runReconciliation(auth.event.id, auth.userId);
+    const summary = await runReconciliation(auth.event.id, {
+      runBy: auth.userId,
+      trigger: "manual",
+    });
     revalidatePath(`/admin/${slug}`);
-    return {
-      message:
-        `Confirmed ${summary.confirmed}. ` +
-        `${summary.needsReview} need${summary.needsReview === 1 ? "s" : ""} review. ` +
-        `${summary.unclaimedCredits} credit${summary.unclaimedCredits === 1 ? "" : "s"} unclaimed.`,
-    };
+    return { message: describeRun(summary) };
   } catch (err) {
+    if (err instanceof AccountNotConfiguredError) return { error: err.message };
     console.error(`[admin/${slug}] reconcile failed:`, err);
-    return { error: "Reconciliation failed. Check the logs and try again." };
+    return { error: "Matching failed. Check the logs and try again." };
   }
 }
 
