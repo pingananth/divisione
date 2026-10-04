@@ -84,10 +84,13 @@ export function ReviewForm({
   slug,
   registrationId,
   ticketId,
+  noUtr = false,
 }: {
   slug: string;
   registrationId: string;
   ticketId: string;
+  /** No UPI reference on file: confirming needs a note on how they paid. */
+  noUtr?: boolean;
 }) {
   const action = reviewRegistrationAction.bind(null, slug);
   const [state, formAction] = useActionState<ActionState, FormData>(action, {});
@@ -102,7 +105,11 @@ export function ReviewForm({
         <input
           id={`note-${registrationId}`}
           name="note"
-          placeholder="Note (emailed to the member if you reject)"
+          placeholder={
+            noUtr
+              ? "How did they pay? Required to confirm, e.g. cash at desk"
+              : "Note (emailed to the member if you reject)"
+          }
           className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 outline-none focus:border-ti-blue focus:ring-2 focus:ring-ti-blue/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500"
         />
         <button

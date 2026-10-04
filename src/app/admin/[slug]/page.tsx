@@ -25,8 +25,14 @@ type RegistrationRow = {
   created_at: string;
   match_status: OutcomeKind | null;
   match_detail: string | null;
-  payment_claims: { utr: string; matched_at: string | null }[] | null;
+  payment_claims: { utr: string; matched_at: string | null; created_at: string }[] | null;
 };
+
+/** "3 h ago" / "2 d ago" — how long a registration has been waiting. */
+function ago(iso: string): string {
+  const hours = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 3_600_000));
+  return hours < 48 ? `${hours} h ago` : `${Math.floor(hours / 24)} d ago`;
+}
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
@@ -64,7 +70,7 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
     db
       .from("registrations")
       .select(
-        "id, ticket_id, full_name, email, phone, club, attendee_type, amount_due_paise, status, review_note, created_at, match_status, match_detail, payment_claims(utr, matched_at)",
+        "id, ticket_id, full_name, email, phone, club, attendee_type, amount_due_paise, status, review_note, created_at, match_status, match_detail, payment_claims(utr, matched_at, created_at)",
       )
       .eq("event_id", event.id)
       .order("created_at", { ascending: false }),
@@ -179,6 +185,73 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
             ))}
           </ul>
         </section>
+      ) : null}
+
+      {/* Collapsed by default so "Needs review" stays the focus, but an organiser
+          can still confirm a payment they can already see in the bank app, or
+          someone who paid cash at the desk. */}
+      {waitingForBank.length > 0 ? (
+        <details className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700">
+          <summary className="cursor-pointer text-lg font-semibold">
+            Waiting for bank ({waitingForBank.length})
+          </summary>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            Reference submitted, not in the bank records yet. These confirm on their own once the
+            statement arrives — confirm early only if you can see the money in your bank app.
+          </p>
+          <ul className="mt-4 divide-y divide-zinc-200 dark:divide-zinc-700">
+            {waitingForBank.map((r) => (
+              <li key={r.id} className="py-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="font-medium">
+                    {r.full_name}{" "}
+                    <span className="font-mono text-sm text-zinc-500 dark:text-zinc-400">{r.ticket_id}</span>
+                  </span>
+                  <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                    owes {formatPaise(r.amount_due_paise)} · ref{" "}
+                    <span className="font-mono">{r.payment_claims?.[0]?.utr}</span> · submitted{" "}
+                    {r.payment_claims?.[0]?.created_at ? ago(r.payment_claims[0].created_at) : "—"}
+                  </span>
+                </div>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  {r.email} · {r.phone}
+                </p>
+                <ReviewForm slug={slug} registrationId={r.id} ticketId={r.ticket_id} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+
+      {awaitingPayment.length > 0 ? (
+        <details className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700">
+          <summary className="cursor-pointer text-lg font-semibold">
+            Not paid yet ({awaitingPayment.length})
+          </summary>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            Registered but never entered a UPI reference. To confirm one — for example, cash paid
+            at the desk — write how they paid in the note.
+          </p>
+          <ul className="mt-4 divide-y divide-zinc-200 dark:divide-zinc-700">
+            {awaitingPayment.map((r) => (
+              <li key={r.id} className="py-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="font-medium">
+                    {r.full_name}{" "}
+                    <span className="font-mono text-sm text-zinc-500 dark:text-zinc-400">{r.ticket_id}</span>
+                  </span>
+                  <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                    owes {formatPaise(r.amount_due_paise)} · registered {ago(r.created_at)}
+                  </span>
+                </div>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  {r.email} · {r.phone}
+                </p>
+                <ReviewForm slug={slug} registrationId={r.id} ticketId={r.ticket_id} noUtr />
+              </li>
+            ))}
+          </ul>
+        </details>
       ) : null}
 
       <section className="mt-6 rounded-2xl bg-white ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700 p-6 shadow-sm">

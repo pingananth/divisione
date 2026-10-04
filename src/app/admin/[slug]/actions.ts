@@ -11,6 +11,7 @@ import {
 } from "@/lib/reconcile-run";
 import { outboxKey } from "@/lib/email/outbox";
 import { formatEventDate, parseContacts, parseInfoSections } from "@/lib/events";
+import { reviewProblem } from "@/lib/review";
 
 export type ActionState = { error?: string; message?: string };
 
@@ -196,15 +197,11 @@ export async function reviewRegistrationAction(
   const decision = String(formData.get("decision") ?? "");
   const note = String(formData.get("note") ?? "").trim();
 
-  if (decision !== "confirmed" && decision !== "rejected") {
-    return { error: "Choose confirm or reject." };
-  }
-
   const db = serviceClient();
 
   const { data: reg, error: regError } = await db
     .from("registrations")
-    .select("id, ticket_id, full_name, email, amount_due_paise, event_id")
+    .select("id, ticket_id, full_name, email, amount_due_paise, event_id, status, payment_claims(utr)")
     .eq("id", registrationId)
     .eq("event_id", auth.event.id)
     .maybeSingle();
@@ -212,17 +209,35 @@ export async function reviewRegistrationAction(
   if (regError) return { error: `Could not load that registration: ${regError.message}` };
   if (!reg) return { error: "That registration is not part of this conference." };
 
-  const { error } = await db
+  const claims = (reg.payment_claims ?? []) as { utr: string }[];
+  const problem = reviewProblem({
+    status: reg.status,
+    hasUtr: claims.length > 0,
+    decision,
+    note,
+  });
+  if (problem) return { error: `${reg.ticket_id}: ${problem}` };
+
+  // Guarded on status too: another organiser may have decided this between
+  // the read above and this write.
+  const { data: updated, error } = await db
     .from("registrations")
     .update({
       status: decision,
       review_note: note || null,
       reviewed_by: auth.userId,
       reviewed_at: new Date().toISOString(),
+      match_status: null,
+      match_detail: null,
     })
-    .eq("id", reg.id);
+    .eq("id", reg.id)
+    .eq("status", "pending")
+    .select("id");
 
   if (error) return { error: `Could not update that registration: ${error.message}` };
+  if (!updated?.length) {
+    return { error: `${reg.ticket_id} was just decided by someone else. Refresh to see it.` };
+  }
 
   const template = decision === "confirmed" ? "registration_confirmed" : "payment_needs_attention";
 
