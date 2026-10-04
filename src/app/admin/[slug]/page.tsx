@@ -19,6 +19,7 @@ type RegistrationRow = {
   phone: string;
   club: string | null;
   attendee_type: string | null;
+  tier_id: string;
   amount_due_paise: number;
   status: "pending" | "confirmed" | "rejected";
   review_note: string | null;
@@ -59,7 +60,7 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
   // RLS returns nothing unless this organiser runs this event.
   const { data: event, error: eventError } = await db
     .from("events")
-    .select("id, title, venue, starts_at, upi_vpa, registration_open, account_last4")
+    .select("id, title, venue, starts_at, upi_vpa, registration_open, account_last4, tiers")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -70,7 +71,7 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
     db
       .from("registrations")
       .select(
-        "id, ticket_id, full_name, email, phone, club, attendee_type, amount_due_paise, status, review_note, created_at, match_status, match_detail, payment_claims(utr, matched_at, created_at)",
+        "id, ticket_id, full_name, email, phone, club, attendee_type, tier_id, amount_due_paise, status, review_note, created_at, match_status, match_detail, payment_claims(utr, matched_at, created_at)",
       )
       .eq("event_id", event.id)
       .order("created_at", { ascending: false }),
@@ -97,6 +98,14 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
     (r) => r.match_status === null || !REVIEW_KINDS.has(r.match_status),
   );
   const awaitingPayment = pending.filter((r) => !r.payment_claims?.[0]?.utr);
+  // Main table: anyone with a decision or a payment reference. Registrations
+  // that never paid get their own list, so they don't crowd out real payments.
+  const withPayment = registrations.filter(
+    (r) => r.status !== "pending" || r.payment_claims?.[0]?.utr,
+  );
+  const ticketLabel = new Map(
+    ((event.tiers ?? []) as { id: string; label: string }[]).map((t) => [t.id, t.label]),
+  );
   const collectedPaise = confirmed.reduce((sum, r) => sum + r.amount_due_paise, 0);
 
   return (
@@ -255,8 +264,12 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
       ) : null}
 
       <section className="mt-6 rounded-2xl bg-white ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700 p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">All registrations ({registrations.length})</h2>
-        {registrations.length === 0 ? (
+        <h2 className="text-lg font-semibold">Registrations ({withPayment.length})</h2>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          Confirmed, rejected, and everyone who has submitted a payment reference. People who
+          registered but never paid are in &ldquo;Not paid yet&rdquo; above.
+        </p>
+        {withPayment.length === 0 ? (
           <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">No registrations yet.</p>
         ) : (
           <div className="mt-4 overflow-x-auto">
@@ -266,13 +279,14 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
                   <th className="py-2 pr-4 font-medium">Ticket</th>
                   <th className="py-2 pr-4 font-medium">Name</th>
                   <th className="py-2 pr-4 font-medium">Club / attending as</th>
+                  <th className="py-2 pr-4 font-medium">Ticket</th>
                   <th className="py-2 pr-4 font-medium">Amount</th>
                   <th className="py-2 pr-4 font-medium">Reference</th>
                   <th className="py-2 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {registrations.map((r) => (
+                {withPayment.map((r) => (
                   <tr key={r.id}>
                     <td className="py-2 pr-4 font-mono">{r.ticket_id}</td>
                     <td className="py-2 pr-4">
@@ -281,6 +295,9 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
                     </td>
                     <td className="py-2 pr-4 text-zinc-600 dark:text-zinc-300">
                       {r.club ?? (r.attendee_type ? optionLabel(ATTENDEE_TYPES, r.attendee_type) : "—")}
+                    </td>
+                    <td className="py-2 pr-4 text-zinc-600 dark:text-zinc-300">
+                      {ticketLabel.get(r.tier_id) ?? r.tier_id}
                     </td>
                     <td className="py-2 pr-4">{formatPaise(r.amount_due_paise)}</td>
                     <td className="py-2 pr-4 font-mono text-xs">

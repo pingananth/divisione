@@ -29,6 +29,27 @@ export function selectTier(tiers: PriceTier[], at: Date = new Date()): PriceTier
   return tiers.find((t) => t.endsAt === null) ?? null;
 }
 
+/**
+ * Tickets a member can choose from right now: one price per ticket, picked by
+ * `selectTier` among that ticket's tiers. Order follows the first appearance
+ * of each ticket in the list, so organisers control the order shown.
+ */
+export function availableTickets(tiers: PriceTier[], at: Date = new Date()): PriceTier[] {
+  const groups = new Map<string, PriceTier[]>();
+  for (const tier of tiers) {
+    const key = tier.ticket ?? "";
+    const group = groups.get(key);
+    if (group) group.push(tier);
+    else groups.set(key, [tier]);
+  }
+  const out: PriceTier[] = [];
+  for (const group of groups.values()) {
+    const tier = selectTier(group, at);
+    if (tier) out.push(tier);
+  }
+  return out;
+}
+
 /** Format integer paise as a rupee string for display, e.g. 30000 => "₹300". */
 export function formatPaise(paise: number): string {
   const rupees = paise / 100;

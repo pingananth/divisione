@@ -335,3 +335,52 @@ describe("optionLabel", () => {
     expect(optionLabel(VEHICLE_TYPES, null)).toBe("");
   });
 });
+
+describe("ticket choice", () => {
+  const CUTOFF = "2026-10-20T23:59:59+05:30";
+  const tickets: PriceTier[] = [
+    { id: "student", label: "Student", amountPaise: 15000, endsAt: null, ticket: "student" },
+    { id: "tm-early", label: "Toastmaster (early bird)", amountPaise: 25000, endsAt: CUTOFF, ticket: "toastmaster" },
+    { id: "tm", label: "Toastmaster", amountPaise: 30000, endsAt: null, ticket: "toastmaster" },
+    { id: "guest", label: "Guest", amountPaise: 40000, endsAt: null, ticket: "guest" },
+  ];
+  const before = new Date("2026-10-15T12:00:00+05:30");
+  const after = new Date("2026-10-21T00:00:00+05:30");
+
+  it("offers one price per ticket: early bird before the cutoff", async () => {
+    const { availableTickets } = await import("./pricing");
+    expect(availableTickets(tickets, before).map((t) => t.id)).toEqual(["student", "tm-early", "guest"]);
+  });
+
+  it("switches the Toastmaster ticket to the regular price after the cutoff", async () => {
+    const { availableTickets } = await import("./pricing");
+    expect(availableTickets(tickets, after).map((t) => t.id)).toEqual(["student", "tm", "guest"]);
+  });
+
+  it("prices the ticket the member picked", () => {
+    const r = priceRegistration({ tiers: tickets, registrationOpen: true }, before, "guest");
+    expect(r.ok && r.priced.amountDuePaise).toBe(40000);
+  });
+
+  it("asks for a ticket when there is a choice and none was made", () => {
+    const r = priceRegistration({ tiers: tickets, registrationOpen: true }, before, "");
+    expect(r).toMatchObject({ ok: false, field: "ticket", reason: "Please choose a ticket" });
+  });
+
+  it("refuses an early-bird pick submitted after the cutoff from a stale page", () => {
+    const r = priceRegistration({ tiers: tickets, registrationOpen: true }, after, "tm-early");
+    expect(r).toMatchObject({ ok: false, field: "ticket" });
+    if (!r.ok) expect(r.reason).toMatch(/price has changed/);
+  });
+
+  it("refuses a ticket id that does not exist", () => {
+    expect(priceRegistration({ tiers: tickets, registrationOpen: true }, before, "vip")).toMatchObject({ ok: false });
+  });
+
+  it("leaves a plain early-bird/regular event as no choice, exactly as before", async () => {
+    const { availableTickets } = await import("./pricing");
+    expect(availableTickets(tiers, new Date("2026-09-20T10:00:00+05:30")).map((t) => t.id)).toEqual(["early"]);
+    const r = priceRegistration({ tiers, registrationOpen: true }, new Date("2026-09-20T10:00:00+05:30"));
+    expect(r.ok && r.priced.tierId).toBe("early");
+  });
+});

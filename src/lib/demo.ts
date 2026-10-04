@@ -45,8 +45,13 @@ const demoEventRow = {
   upi_vpa: "demo@okhdfcbank",
   upi_payee_name: "Division A Contest",
   ref_prefix: "A",
-  tiers: [{ id: "regular", label: "Registration", amountPaise: 30000, endsAt: null }],
-  enabled_fields: ["attendeeType", "mealPreference", "vehicle", "governmentId"],
+  tiers: [
+    { id: "student", ticket: "student", label: "Student", amountPaise: 15000, endsAt: null },
+    { id: "toastmaster-early", ticket: "toastmaster", label: "Toastmaster (early bird)", amountPaise: 25000, endsAt: "2026-10-20T23:59:59+05:30" },
+    { id: "toastmaster", ticket: "toastmaster", label: "Toastmaster", amountPaise: 30000, endsAt: null },
+    { id: "guest", ticket: "guest", label: "Guest", amountPaise: 40000, endsAt: null },
+  ],
+  enabled_fields: ["mealPreference", "vehicle", "governmentId"],
   support_email: "demo@example.org",
   registration_open: true,
   info_sections: [

@@ -11,6 +11,7 @@ import {
   GOV_ID_TYPES,
 } from "@/lib/registration";
 import type { CustomFieldKey } from "@/lib/types";
+import { formatPaise } from "@/lib/pricing";
 
 const labelClass = "block text-sm font-medium text-zinc-700 dark:text-zinc-300";
 const inputClass =
@@ -59,9 +60,12 @@ function Choice({
   value,
   onChange,
   error,
+  stacked = false,
 }: {
   name: string;
   legend: string;
+  /** One option per row, for longer labels such as ticket names with prices. */
+  stacked?: boolean;
   options: readonly { value: string; label: string }[];
   value: string;
   onChange?: (value: string) => void;
@@ -70,7 +74,7 @@ function Choice({
   return (
     <fieldset aria-describedby={error ? `${name}-error` : undefined}>
       <legend className={labelClass}>{legend}</legend>
-      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+      <div className={`mt-2 grid gap-2 ${stacked ? "" : "sm:grid-cols-3"}`}>
         {options.map((o) => (
           <label
             key={o.value}
@@ -108,9 +112,12 @@ function SubmitButton({ pending }: { pending: boolean }) {
 export function RegistrationForm({
   slug,
   enabledFields,
+  tickets = [],
 }: {
   slug: string;
   enabledFields: CustomFieldKey[];
+  /** Tickets on sale right now. A choice is shown only when there is more than one. */
+  tickets?: { id: string; label: string; amountPaise: number }[];
 }) {
   const action = registerAction.bind(null, slug);
   const [state, formAction, pending] = useActionState<RegisterState, FormData>(action, {});
@@ -151,6 +158,17 @@ export function RegistrationForm({
         <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/60 dark:text-red-300">
           {state.formError}
         </p>
+      ) : null}
+
+      {tickets.length > 1 ? (
+        <Choice
+          name="ticket"
+          legend="Ticket"
+          options={tickets.map((t) => ({ value: t.id, label: `${t.label} — ${formatPaise(t.amountPaise)}` }))}
+          value={values.ticket ?? ""}
+          error={errors.ticket}
+          stacked
+        />
       ) : null}
 
       <Field name="fullName" label="Full name" error={errors.fullName}>

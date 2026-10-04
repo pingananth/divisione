@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { CustomFieldKey, EventConfig } from "./types";
-import { selectTier } from "./pricing";
+import { availableTickets } from "./pricing";
 
 /**
  * Indian mobile numbers, tolerant of the ways people type them:
@@ -260,14 +260,33 @@ export type PricedRegistration = {
 export function priceRegistration(
   event: Pick<EventConfig, "tiers" | "registrationOpen">,
   at: Date = new Date(),
-): { ok: true; priced: PricedRegistration } | { ok: false; reason: string } {
+  /** Tier id of the ticket the member picked; ignored when there is only one. */
+  chosenTierId?: string,
+): { ok: true; priced: PricedRegistration } | { ok: false; reason: string; field?: "ticket" } {
   if (!event.registrationOpen) {
     return { ok: false, reason: "Registration for this event is closed." };
   }
 
-  const tier = selectTier(event.tiers, at);
-  if (!tier) {
+  const tickets = availableTickets(event.tiers, at);
+  if (tickets.length === 0) {
     return { ok: false, reason: "Registration for this event has closed." };
+  }
+
+  let tier = tickets[0];
+  if (tickets.length > 1) {
+    const chosen = tickets.find((t) => t.id === chosenTierId);
+    if (!chosen) {
+      // Also covers a stale page offering an early-bird price that has since
+      // ended: its tier id is no longer on the list.
+      return {
+        ok: false,
+        field: "ticket",
+        reason: chosenTierId
+          ? "That ticket's price has changed. Please choose your ticket again."
+          : "Please choose a ticket",
+      };
+    }
+    tier = chosen;
   }
 
   return {

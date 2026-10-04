@@ -43,7 +43,7 @@ const HEADER = [
   "Vehicle number",
   "ID type",
   "ID number",
-  "Tier",
+  "Ticket",
   "Amount (INR)",
   "Status",
   "UPI reference",
@@ -68,7 +68,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   // RLS scopes this to events the organiser actually runs.
   const { data: event, error: eventError } = await db
     .from("events")
-    .select("id, title")
+    .select("id, title, tiers")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -84,6 +84,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     .order("created_at", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const ticketLabel = new Map(
+    ((event.tiers ?? []) as { id: string; label: string }[]).map((t) => [t.id, t.label]),
+  );
 
   const rows = ((data ?? []) as Row[]).map((r) => {
     const claim = r.payment_claims?.[0];
@@ -102,7 +106,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
       r.vehicle_number,
       optionLabel(GOV_ID_TYPES, r.gov_id_type),
       r.gov_id_number,
-      r.tier_id,
+      ticketLabel.get(r.tier_id) ?? r.tier_id,
       (r.amount_due_paise / 100).toFixed(2),
       r.status,
       claim?.utr ?? "",

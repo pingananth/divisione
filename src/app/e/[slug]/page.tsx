@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { CalendarDays, CircleCheck, CircleX, Clock, Info, MapPin, Phone } from "lucide-react";
 import { getEventBySlug, formatEventDay, formatEventTime, formatPhone } from "@/lib/events";
-import { selectTier, formatPaise } from "@/lib/pricing";
+import { availableTickets, formatPaise } from "@/lib/pricing";
 import type { InfoSection } from "@/lib/types";
 import { RegistrationForm } from "./RegistrationForm";
 
@@ -41,8 +41,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const event = await getEventBySlug(slug);
   if (!event) notFound();
 
-  const tier = selectTier(event.tiers);
-  const closed = !event.registrationOpen || !tier;
+  const tickets = availableTickets(event.tiers);
+  const closed = !event.registrationOpen || tickets.length === 0;
+  const cheapest = Math.min(...tickets.map((t) => t.amountPaise));
   const venueLines =
     event.venue
       ?.split("|")
@@ -172,8 +173,17 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           <>
             <div className="mb-6 flex items-baseline justify-between border-b border-zinc-200 pb-4 dark:border-zinc-700">
               <div>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">{tier.label}</p>
-                <p className="text-2xl font-bold">{formatPaise(tier.amountPaise)}</p>
+                {tickets.length === 1 ? (
+                  <>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">{tickets[0].label}</p>
+                    <p className="text-2xl font-bold">{formatPaise(tickets[0].amountPaise)}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">Tickets from</p>
+                    <p className="text-2xl font-bold">{formatPaise(cheapest)}</p>
+                  </>
+                )}
               </div>
               <p className="text-right text-xs text-zinc-500 dark:text-zinc-400">
                 Paid by UPI.
@@ -181,7 +191,11 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 No booking fee.
               </p>
             </div>
-            <RegistrationForm slug={slug} enabledFields={event.enabledFields} />
+            <RegistrationForm
+              slug={slug}
+              enabledFields={event.enabledFields}
+              tickets={tickets.map((t) => ({ id: t.id, label: t.label, amountPaise: t.amountPaise }))}
+            />
           </>
         )}
       </section>

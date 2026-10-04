@@ -38,19 +38,27 @@ export async function registerAction(
     for (const input of inputs) raw[input] = on ? String(formData.get(input) ?? "") : "";
   }
 
+  // Price on the server from the event's own tiers — never from the form.
+  // The form only says which ticket was picked; its price is looked up here.
+  // Checked before the other fields so a missing ticket is reported together
+  // with every other problem, not on a second submit.
+  const ticket = String(formData.get("ticket") ?? "");
+  const pricing = priceRegistration(event, new Date(), ticket);
+  const values = { ...raw, ticket };
+  if (!pricing.ok && !pricing.field) return { formError: pricing.reason, values };
+
   const parsed = registrationSchema(event.enabledFields).safeParse(raw);
-  if (!parsed.success) {
+  if (!parsed.success || !pricing.ok) {
     const errors: Record<string, string> = {};
-    for (const issue of parsed.error.issues) {
+    if (!pricing.ok) errors.ticket = pricing.reason;
+    for (const issue of parsed.success ? [] : parsed.error.issues) {
       const key = String(issue.path[0] ?? "form");
       errors[key] ??= issue.message;
     }
-    return { errors, values: raw };
+    return { errors, values };
   }
 
-  // Price on the server from the event's own tiers — never from the form.
-  const pricing = priceRegistration(event);
-  if (!pricing.ok) return { formError: pricing.reason, values: raw };
+
 
   const data = parsed.data;
 
@@ -111,6 +119,6 @@ export async function registerAction(
   console.error(`[register] insert failed for ${slug}: ${lastError}`);
   return {
     formError: "Something went wrong saving your registration. Please try again.",
-    values: raw,
+    values,
   };
 }

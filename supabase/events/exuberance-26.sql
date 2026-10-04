@@ -33,7 +33,9 @@ select
 
   -- Every field listed here is mandatory. Club, area, division and T-shirt
   -- size are not collected for this event.
-  array['attendeeType','mealPreference','vehicle','governmentId'],
+  -- 'Attending as' is not asked: the ticket (Student / Toastmaster / Guest)
+  -- already says it. Tickets are set in exuberance-26-tickets.sql.
+  array['mealPreference','vehicle','governmentId'],
 
   $json$[
     {

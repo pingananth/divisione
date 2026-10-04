@@ -11,6 +11,13 @@ export type PriceTier = {
    * fallback tier that applies once every dated tier has lapsed.
    */
   endsAt: string | null;
+  /**
+   * Ticket this tier belongs to, e.g. "toastmaster". Tiers sharing a ticket
+   * are one choice whose price changes by date (early bird → regular); members
+   * pick between tickets. Tiers without a ticket all form one implicit ticket,
+   * so a plain early-bird/regular event offers no choice at all.
+   */
+  ticket?: string;
 };
 
 export type CustomFieldKey =
