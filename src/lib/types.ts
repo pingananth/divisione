@@ -45,10 +45,16 @@ export type EventConfig = {
   description?: string | null;
   /** Guideline blocks such as Do's and Don'ts. */
   infoSections?: InfoSection[];
-  /** Person members can call with questions. */
-  contactName?: string | null;
+  /** People members can call with questions, in display order. */
+  contacts?: EventContact[];
+};
+
+export type EventContact = {
+  name: string;
+  /** e.g. "Conference Chair", "Registration Chair". */
+  role?: string;
   /** 10-digit Indian mobile, digits only. */
-  contactPhone?: string | null;
+  phone: string;
 };
 
 export type InfoSection = {

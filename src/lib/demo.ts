@@ -79,8 +79,10 @@ const demoEventRow = {
       ],
     },
   ],
-  contact_name: "TM Kowsalya",
-  contact_phone: "7010737617",
+  contacts: [
+    { name: "TM Kowsalya", role: "Conference Chair", phone: "7010737617" },
+    { name: "TM Rajan", role: "Registration Chair", phone: "8883388222" },
+  ],
 };
 
 export function demoEvent(): EventConfig & { supportEmail: string } {

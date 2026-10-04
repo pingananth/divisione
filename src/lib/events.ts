@@ -1,7 +1,7 @@
 import { serviceClient } from "./supabase";
 import { isDemoMode } from "./demo";
 import { z } from "zod";
-import type { EventConfig, CustomFieldKey, PriceTier, InfoSection } from "./types";
+import type { EventConfig, CustomFieldKey, PriceTier, InfoSection, EventContact } from "./types";
 
 type EventRow = {
   id: string;
@@ -20,9 +20,36 @@ type EventRow = {
   subtitle?: string | null;
   description?: string | null;
   info_sections?: unknown;
-  contact_name?: string | null;
-  contact_phone?: string | null;
+  contacts?: unknown;
 };
+
+const contactsSchema = z.array(
+  z.object({
+    name: z.string().min(1),
+    role: z.string().optional(),
+    // Accept "+91 88833 88222" as typed, keep the 10 digits.
+    phone: z
+      .string()
+      .transform((v) => v.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, ""))
+      .pipe(z.string().regex(/^[6-9]\d{9}$/)),
+  }),
+);
+
+/** Contacts typed by hand into the database; a malformed list is dropped and logged. */
+export function parseContacts(raw: unknown, slug = "?"): EventContact[] {
+  if (raw === null || raw === undefined) return [];
+  const parsed = contactsSchema.safeParse(raw);
+  if (!parsed.success) {
+    console.error(`[events] ignoring malformed contacts for "${slug}": ${parsed.error.message}`);
+    return [];
+  }
+  return parsed.data;
+}
+
+/** The person to call about a stuck payment: the registration chair, else the first contact. */
+export function registrationContact(contacts: EventContact[] = []): EventContact | undefined {
+  return contacts.find((c) => /registration/i.test(c.role ?? "")) ?? contacts[0];
+}
 
 const infoSectionsSchema = z.array(
   z.object({
@@ -65,8 +92,7 @@ export function toEventConfig(row: EventRow): EventConfig & { supportEmail: stri
     subtitle: row.subtitle ?? null,
     description: row.description ?? null,
     infoSections: parseInfoSections(row.info_sections, row.slug),
-    contactName: row.contact_name ?? null,
-    contactPhone: row.contact_phone ?? null,
+    contacts: parseContacts(row.contacts, row.slug),
   };
 }
 

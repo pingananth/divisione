@@ -1,6 +1,6 @@
 -- Exuberance'26 — Division A Humorous Speech & Evaluation Contest.
 --
--- Run AFTER supabase/migrations/0003_event_details.sql and 0004_attendee_details.sql.
+-- Run AFTER migrations 0003, 0004 and 0005.
 --
 -- Payment setup (UPI ID, payee name, account last 4, support email) is copied
 -- from the existing 'division-e-2026' event so nothing needs re-entering.
@@ -12,7 +12,7 @@
 insert into events (
   slug, title, subtitle, description, venue, starts_at, ends_at,
   upi_vpa, upi_payee_name, ref_prefix, account_last4, support_email,
-  tiers, enabled_fields, info_sections, contact_name, contact_phone,
+  tiers, enabled_fields, info_sections, contacts,
   registration_open
 )
 select
@@ -58,8 +58,10 @@ select
     }
   ]$json$::jsonb,
 
-  'TM Kowsalya',
-  '7010737617',
+  $json$[
+    { "name": "TM Kowsalya", "role": "Conference Chair",   "phone": "7010737617" },
+    { "name": "TM Rajan",    "role": "Registration Chair", "phone": "8883388222" }
+  ]$json$::jsonb,
   true
 from events e
 where e.slug = 'division-e-2026'
@@ -72,8 +74,7 @@ on conflict (slug) do update set
   ends_at        = excluded.ends_at,
   enabled_fields = excluded.enabled_fields,
   info_sections  = excluded.info_sections,
-  contact_name   = excluded.contact_name,
-  contact_phone  = excluded.contact_phone;
+  contacts       = excluded.contacts;
 
 -- Give the current organisers access to the new event too.
 insert into event_organisers (event_id, user_id)

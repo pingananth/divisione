@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { getRegistrationByTicket } from "@/lib/registrations";
 import { buildUpiIntentUrl, buildReference } from "@/lib/upi";
 import { formatPaise } from "@/lib/pricing";
-import { formatPhone } from "@/lib/events";
+import { formatPhone, registrationContact } from "@/lib/events";
 import { UtrForm } from "./UtrForm";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +31,7 @@ export default async function PayPage({
     reference,
   });
 
+  const contact = registrationContact(event.contacts);
   const qrDataUrl = await QRCode.toDataURL(upiUrl, { margin: 1, width: 320 });
 
   return (
@@ -88,11 +89,12 @@ export default async function PayPage({
 
       <p className="mt-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
         Stuck?{" "}
-        {event.contactPhone ? (
+        {contact ? (
           <>
-            Call {event.contactName ?? "the registration desk"} on{" "}
-            <a className="text-ti-blue underline" href={`tel:+91${event.contactPhone}`}>
-              {formatPhone(event.contactPhone)}
+            Call {contact.name}
+            {contact.role ? ` (${contact.role})` : ""} on{" "}
+            <a className="text-ti-blue underline" href={`tel:+91${contact.phone}`}>
+              {formatPhone(contact.phone)}
             </a>
           </>
         ) : (

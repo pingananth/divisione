@@ -160,19 +160,26 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
         </section>
       ) : null}
 
-      {event.contactPhone ? (
+      {event.contacts && event.contacts.length > 0 ? (
         <section className={`mt-8 ${card}`} aria-label="Contact">
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Any queries? Reach out to our registration chair
-          </p>
-          <p className="mt-1 text-lg font-semibold">{event.contactName ?? "Registration desk"}</p>
-          <a
-            href={`tel:+91${event.contactPhone}`}
-            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-ti-blue px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
-          >
-            <Phone aria-hidden className="size-4" />
-            {formatPhone(event.contactPhone)}
-          </a>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Any queries? Reach out to</p>
+          <ul className="mt-3 space-y-4">
+            {event.contacts.map((c) => (
+              <li key={c.phone} className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-lg font-semibold">{c.name}</p>
+                  {c.role ? <p className="text-sm text-zinc-500 dark:text-zinc-400">{c.role}</p> : null}
+                </div>
+                <a
+                  href={`tel:+91${c.phone}`}
+                  className="inline-flex items-center gap-2 rounded-lg bg-ti-blue px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+                >
+                  <Phone aria-hidden className="size-4" />
+                  {formatPhone(c.phone)}
+                </a>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
     </main>

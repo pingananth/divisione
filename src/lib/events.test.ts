@@ -57,3 +57,29 @@ describe("formatting", () => {
     expect(formatEventDay("2026-10-30T20:00:00Z")).toBe("Saturday, 31 October 2026");
   });
 });
+
+describe("contacts", async () => {
+  const { parseContacts, registrationContact } = await import("./events");
+
+  it("keeps name, role and a 10-digit phone, accepting +91 and spaces", () => {
+    expect(parseContacts([{ name: "TM Rajan", role: "Registration Chair", phone: "+91 88833 88222" }])).toEqual([
+      { name: "TM Rajan", role: "Registration Chair", phone: "8883388222" },
+    ]);
+  });
+
+  it("drops a malformed list instead of crashing the page", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(parseContacts([{ name: "X", phone: "123" }], "x")).toEqual([]);
+    spy.mockRestore();
+  });
+
+  it("sends payment questions to the registration chair", () => {
+    const list = [
+      { name: "TM Kowsalya", role: "Conference Chair", phone: "7010737617" },
+      { name: "TM Rajan", role: "Registration Chair", phone: "8883388222" },
+    ];
+    expect(registrationContact(list)?.name).toBe("TM Rajan");
+    expect(registrationContact([list[0]])?.name).toBe("TM Kowsalya");
+    expect(registrationContact([])).toBeUndefined();
+  });
+});
