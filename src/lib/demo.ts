@@ -35,16 +35,16 @@ const demoEventRow = {
   id: "demo-event",
   slug: DEMO_SLUG,
   title: "Exuberance'26 (Demo)",
-  subtitle: "Division A Humorous Speech & Evaluation Contest",
+  subtitle: "Division E Humorous Speech & Evaluation Contest",
   description:
-    "We’re excited to host the Division A Humorous Speech & Evaluation Contest, and we look forward to welcoming Contestants, Role Players, and Guests to this vibrant event.",
+    "We’re excited to host the Division E Humorous Speech & Evaluation Contest, and we look forward to welcoming Contestants, Role Players, and Guests to this vibrant event.",
   venue:
     "Lennox India Technology Centre | Capital Land Phase 3 - Zenith - 10th floor | CSIR Road, Tharamani, Chennai",
   starts_at: "2026-10-31T09:00:00+05:30",
   ends_at: "2026-10-31T18:00:00+05:30",
   upi_vpa: "demo@okhdfcbank",
-  upi_payee_name: "Division A Contest",
-  ref_prefix: "A",
+  upi_payee_name: "Division E Contest",
+  ref_prefix: "E",
   tiers: [
     { id: "student", ticket: "student", label: "Student", amountPaise: 15000, endsAt: null },
     { id: "toastmaster-early", ticket: "toastmaster", label: "Toastmaster (early bird)", amountPaise: 25000, endsAt: "2026-10-20T23:59:59+05:30" },

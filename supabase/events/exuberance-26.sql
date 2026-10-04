@@ -1,10 +1,10 @@
--- Exuberance'26 — Division A Humorous Speech & Evaluation Contest.
+-- Exuberance'26 — Division E Humorous Speech & Evaluation Contest.
 --
 -- Run AFTER migrations 0003, 0004 and 0005.
 --
 -- Payment setup (UPI ID, payee name, account last 4, support email) is copied
 -- from the existing 'division-e-2026' event so nothing needs re-entering.
--- Change them afterwards if Division A collects into a different account.
+-- Change them afterwards if Division E collects into a different account.
 --
 -- Safe to re-run: the page content below is refreshed, while price and
 -- payment settings are left alone once the event exists.
@@ -18,15 +18,15 @@ insert into events (
 select
   'exuberance-26',
   'Exuberance''26',
-  'Division A Humorous Speech & Evaluation Contest',
-  'We’re excited to host the Division A Humorous Speech & Evaluation Contest, and we look forward to welcoming Contestants, Role Players, and Guests to this vibrant event.',
+  'Division E Humorous Speech & Evaluation Contest',
+  'We’re excited to host the Division E Humorous Speech & Evaluation Contest, and we look forward to welcoming Contestants, Role Players, and Guests to this vibrant event.',
   'Lennox India Technology Centre | Capital Land Phase 3 - Zenith - 10th floor | CSIR Road, Tharamani, Chennai',
   '2026-10-31T09:00:00+05:30',
   -- No end time was given ("9:00 AM onwards"). Only used internally to know
   -- when to stop checking for late payments; never shown to members.
   '2026-10-31T18:00:00+05:30',
 
-  e.upi_vpa, e.upi_payee_name, 'A', e.account_last4, e.support_email,
+  e.upi_vpa, e.upi_payee_name, 'E', e.account_last4, e.support_email,
 
   -- ASSUMED ₹300 (30000 paise). Change if the fee is different.
   $json$[{"id":"regular","label":"Registration","amountPaise":30000,"endsAt":null}]$json$::jsonb,
