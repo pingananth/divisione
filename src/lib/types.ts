@@ -18,7 +18,10 @@ export type CustomFieldKey =
   | "area"
   | "division"
   | "mealPreference"
-  | "tshirtSize";
+  | "tshirtSize"
+  | "attendeeType"
+  | "vehicle"
+  | "governmentId";
 
 export type EventConfig = {
   id: string;

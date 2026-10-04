@@ -217,3 +217,121 @@ describe("registrationSchema reports every problem at once", () => {
     expect(issuesFor([...allFields], { ...valid, mealPreference: "Pizza" })).toContain("mealPreference");
   });
 });
+
+describe("Exuberance'26 fields", () => {
+  const fields = ["attendeeType", "mealPreference", "vehicle", "governmentId"] as const;
+  const schema = registrationSchema([...fields]);
+  const base = {
+    fullName: "Asha Rao",
+    email: "asha@example.com",
+    phone: "9876543210",
+    attendeeType: "toastmaster",
+    mealPreference: "Vegetarian",
+    vehicleType: "four_wheeler",
+    vehicleNumber: "tn 09 ab 1234",
+    govIdType: "pan",
+    govIdNumber: "abcde1234f",
+  };
+  const errorsFor = (input: object) => {
+    const r = schema.safeParse(input);
+    return r.success ? {} : Object.fromEntries(r.error.issues.map((i) => [String(i.path[0]), i.message]));
+  };
+
+  it("accepts a complete submission and stores plate and ID in one canonical form", () => {
+    const r = schema.safeParse(base);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.vehicleNumber).toBe("TN09AB1234");
+      expect(r.data.govIdNumber).toBe("ABCDE1234F");
+    }
+  });
+
+  it("reports every missing field in one submit", () => {
+    expect(Object.keys(errorsFor({ fullName: "", email: "", phone: "" })).sort()).toEqual(
+      ["attendeeType", "email", "fullName", "govIdNumber", "govIdType", "mealPreference", "phone", "vehicleType"].sort(),
+    );
+  });
+
+  it("asks for the vehicle number when coming in their own vehicle", () => {
+    expect(errorsFor({ ...base, vehicleNumber: "" }).vehicleNumber).toBe("Vehicle number is required");
+    expect(errorsFor({ ...base, vehicleType: "two_wheeler", vehicleNumber: "  " }).vehicleNumber).toBe(
+      "Vehicle number is required",
+    );
+  });
+
+  it("shows the vehicle-number error alongside other errors, not after them", () => {
+    const e = errorsFor({ ...base, fullName: "", vehicleNumber: "" });
+    expect(e.fullName).toBeDefined();
+    expect(e.vehicleNumber).toBeDefined();
+  });
+
+  it("does not want a vehicle number for public transport, and drops one if typed", () => {
+    const r = schema.safeParse({ ...base, vehicleType: "public", vehicleNumber: "TN09AB1234" });
+    expect(r.success && r.data.vehicleNumber).toBeNull();
+  });
+
+  it("rejects a plate that is not an Indian registration number", () => {
+    expect(errorsFor({ ...base, vehicleNumber: "HELLO" }).vehicleNumber).toMatch(/as on the plate/);
+  });
+
+  it("accepts common plate formats including Bharat series", () => {
+    for (const plate of ["TN-09-AB-1234", "KA 01 1234", "DL 3C AB 1234", "22 BH 1234 AA"]) {
+      expect(errorsFor({ ...base, vehicleNumber: plate }).vehicleNumber, plate).toBeUndefined();
+    }
+  });
+
+  it("checks each ID number against its own ID type", () => {
+    const cases: [string, string, boolean][] = [
+      ["aadhaar", "2345 6789 0123", true],
+      ["aadhaar", "1234 5678 9012", false], // Aadhaar never starts with 0 or 1
+      ["pan", "ABCDE1234F", true],
+      ["pan", "ABCD1234F", false],
+      ["passport", "A1234567", true],
+      ["passport", "12345678", false],
+      ["voter_id", "ABC1234567", true],
+      ["voter_id", "AB12345678", false],
+      ["driving_licence", "TN09 20201234567", true],
+      ["driving_licence", "123", false],
+    ];
+    for (const [type, number, ok] of cases) {
+      const e = errorsFor({ ...base, govIdType: type, govIdNumber: number });
+      expect(e.govIdNumber === undefined, `${type} ${number}`).toBe(ok);
+    }
+  });
+
+  it("explains the expected format for the chosen ID type", () => {
+    expect(errorsFor({ ...base, govIdType: "aadhaar", govIdNumber: "123" }).govIdNumber).toBe(
+      "Enter a valid 12-digit Aadhaar number",
+    );
+  });
+
+  it("rejects attending-as and travel values that are not offered", () => {
+    expect(errorsFor({ ...base, attendeeType: "vip" }).attendeeType).toBeDefined();
+    expect(errorsFor({ ...base, vehicleType: "helicopter" }).vehicleType).toBeDefined();
+  });
+
+  it("offers only Veg and Non-veg", () => {
+    expect(errorsFor({ ...base, mealPreference: "Jain" }).mealPreference).toBeDefined();
+    expect(errorsFor({ ...base, mealPreference: "Non-vegetarian" }).mealPreference).toBeUndefined();
+  });
+
+  it("refuses travel or ID details for an event that does not collect them", () => {
+    const r = registrationSchema(["club"]).safeParse({
+      ...valid,
+      area: "",
+      division: "",
+      mealPreference: "",
+      tshirtSize: "",
+      vehicleType: "public",
+    });
+    expect(r.success).toBe(false);
+  });
+});
+
+describe("optionLabel", () => {
+  it("turns a stored code into its label", async () => {
+    const { optionLabel, VEHICLE_TYPES } = await import("./registration");
+    expect(optionLabel(VEHICLE_TYPES, "public")).toBe("Public transport");
+    expect(optionLabel(VEHICLE_TYPES, null)).toBe("");
+  });
+});

@@ -46,7 +46,7 @@ const demoEventRow = {
   upi_payee_name: "Division A Contest",
   ref_prefix: "A",
   tiers: [{ id: "regular", label: "Registration", amountPaise: 30000, endsAt: null }],
-  enabled_fields: ["club", "area", "division", "mealPreference"],
+  enabled_fields: ["attendeeType", "mealPreference", "vehicle", "governmentId"],
   support_email: "demo@example.org",
   registration_open: true,
   info_sections: [

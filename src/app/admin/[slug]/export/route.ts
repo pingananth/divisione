@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase-server";
 import { csvDocument } from "@/lib/csv-export";
+import { optionLabel, ATTENDEE_TYPES, VEHICLE_TYPES, GOV_ID_TYPES } from "@/lib/registration";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,11 @@ type Row = {
   division: string | null;
   meal_preference: string | null;
   tshirt_size: string | null;
+  attendee_type: string | null;
+  vehicle_type: string | null;
+  vehicle_number: string | null;
+  gov_id_type: string | null;
+  gov_id_number: string | null;
   tier_id: string;
   amount_due_paise: number;
   status: string;
@@ -32,6 +38,11 @@ const HEADER = [
   "Division",
   "Meal",
   "T-shirt",
+  "Attending as",
+  "Travelling by",
+  "Vehicle number",
+  "ID type",
+  "ID number",
   "Tier",
   "Amount (INR)",
   "Status",
@@ -67,7 +78,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   const { data, error } = await db
     .from("registrations")
     .select(
-      "ticket_id, full_name, email, phone, club, area, division, meal_preference, tshirt_size, tier_id, amount_due_paise, status, review_note, created_at, payment_claims(utr, matched_at)",
+      "ticket_id, full_name, email, phone, club, area, division, meal_preference, tshirt_size, attendee_type, vehicle_type, vehicle_number, gov_id_type, gov_id_number, tier_id, amount_due_paise, status, review_note, created_at, payment_claims(utr, matched_at)",
     )
     .eq("event_id", event.id)
     .order("created_at", { ascending: true });
@@ -86,6 +97,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
       r.division,
       r.meal_preference,
       r.tshirt_size,
+      optionLabel(ATTENDEE_TYPES, r.attendee_type),
+      optionLabel(VEHICLE_TYPES, r.vehicle_type),
+      r.vehicle_number,
+      optionLabel(GOV_ID_TYPES, r.gov_id_type),
+      r.gov_id_number,
       r.tier_id,
       (r.amount_due_paise / 100).toFixed(2),
       r.status,

@@ -1,6 +1,6 @@
 -- Exuberance'26 — Division A Humorous Speech & Evaluation Contest.
 --
--- Run AFTER supabase/migrations/0003_event_details.sql.
+-- Run AFTER supabase/migrations/0003_event_details.sql and 0004_attendee_details.sql.
 --
 -- Payment setup (UPI ID, payee name, account last 4, support email) is copied
 -- from the existing 'division-e-2026' event so nothing needs re-entering.
@@ -31,8 +31,9 @@ select
   -- ASSUMED ₹300 (30000 paise). Change if the fee is different.
   $json$[{"id":"regular","label":"Registration","amountPaise":30000,"endsAt":null}]$json$::jsonb,
 
-  -- T-shirt size removed. Every field listed here is mandatory.
-  array['club','area','division','mealPreference'],
+  -- Every field listed here is mandatory. Club, area, division and T-shirt
+  -- size are not collected for this event.
+  array['attendeeType','mealPreference','vehicle','governmentId'],
 
   $json$[
     {

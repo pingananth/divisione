@@ -5,6 +5,7 @@ import { isDemoMode } from "@/lib/demo";
 import { DemoAdminNotice } from "@/components/DemoAdminNotice";
 import { formatPaise } from "@/lib/pricing";
 import { REVIEW_KINDS, type OutcomeKind } from "@/lib/reconcile";
+import { optionLabel, ATTENDEE_TYPES } from "@/lib/registration";
 import { formatEventDate } from "@/lib/events";
 import { UploadStatementForm, ReconcileButton, ReviewForm } from "./AdminForms";
 
@@ -17,6 +18,7 @@ type RegistrationRow = {
   email: string;
   phone: string;
   club: string | null;
+  attendee_type: string | null;
   amount_due_paise: number;
   status: "pending" | "confirmed" | "rejected";
   review_note: string | null;
@@ -62,7 +64,7 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
     db
       .from("registrations")
       .select(
-        "id, ticket_id, full_name, email, phone, club, amount_due_paise, status, review_note, created_at, match_status, match_detail, payment_claims(utr, matched_at)",
+        "id, ticket_id, full_name, email, phone, club, attendee_type, amount_due_paise, status, review_note, created_at, match_status, match_detail, payment_claims(utr, matched_at)",
       )
       .eq("event_id", event.id)
       .order("created_at", { ascending: false }),
@@ -190,7 +192,7 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
                 <tr>
                   <th className="py-2 pr-4 font-medium">Ticket</th>
                   <th className="py-2 pr-4 font-medium">Name</th>
-                  <th className="py-2 pr-4 font-medium">Club</th>
+                  <th className="py-2 pr-4 font-medium">Club / attending as</th>
                   <th className="py-2 pr-4 font-medium">Amount</th>
                   <th className="py-2 pr-4 font-medium">Reference</th>
                   <th className="py-2 font-medium">Status</th>
@@ -204,7 +206,9 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
                       <span className="block font-medium">{r.full_name}</span>
                       <span className="block text-xs text-zinc-500 dark:text-zinc-400">{r.email}</span>
                     </td>
-                    <td className="py-2 pr-4 text-zinc-600 dark:text-zinc-300">{r.club ?? "—"}</td>
+                    <td className="py-2 pr-4 text-zinc-600 dark:text-zinc-300">
+                      {r.club ?? (r.attendee_type ? optionLabel(ATTENDEE_TYPES, r.attendee_type) : "—")}
+                    </td>
                     <td className="py-2 pr-4">{formatPaise(r.amount_due_paise)}</td>
                     <td className="py-2 pr-4 font-mono text-xs">
                       {r.payment_claims?.[0]?.utr ?? "—"}

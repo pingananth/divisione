@@ -2,24 +2,21 @@
 
 import { redirect } from "next/navigation";
 import { getEventBySlug } from "@/lib/events";
-import { registrationSchema, priceRegistration } from "@/lib/registration";
+import { registrationSchema, priceRegistration, FIELD_INPUTS } from "@/lib/registration";
 import { generateTicketId } from "@/lib/ticket";
 import { serviceClient } from "@/lib/supabase";
 import { isDemoMode } from "@/lib/demo";
-import type { CustomFieldKey } from "@/lib/types";
 
 export type RegisterState = {
   errors?: Record<string, string>;
   formError?: string;
+  /**
+   * What the member submitted, echoed back on any error. React 19 resets a
+   * form after its action runs; without this, one typo in the email wiped
+   * every field they had filled in.
+   */
+  values?: Record<string, string>;
 };
-
-const FIELD_KEYS: CustomFieldKey[] = [
-  "club",
-  "area",
-  "division",
-  "mealPreference",
-  "tshirtSize",
-];
 
 export async function registerAction(
   slug: string,
@@ -29,19 +26,17 @@ export async function registerAction(
   const event = await getEventBySlug(slug);
   if (!event) return { formError: "This event could not be found." };
 
-  const raw = {
+  // Only read inputs for fields this event collects, so a tampered form body
+  // cannot smuggle in values the organiser disabled.
+  const raw: Record<string, string> = {
     fullName: String(formData.get("fullName") ?? ""),
     email: String(formData.get("email") ?? ""),
     phone: String(formData.get("phone") ?? ""),
-    ...Object.fromEntries(
-      FIELD_KEYS.map((k) => [
-        k,
-        // Only read fields this event actually collects, so a tampered form
-        // body cannot smuggle in values the organiser disabled.
-        event.enabledFields.includes(k) ? String(formData.get(k) ?? "") : "",
-      ]),
-    ),
   };
+  for (const [field, inputs] of Object.entries(FIELD_INPUTS)) {
+    const on = event.enabledFields.includes(field as keyof typeof FIELD_INPUTS);
+    for (const input of inputs) raw[input] = on ? String(formData.get(input) ?? "") : "";
+  }
 
   const parsed = registrationSchema(event.enabledFields).safeParse(raw);
   if (!parsed.success) {
@@ -50,12 +45,12 @@ export async function registerAction(
       const key = String(issue.path[0] ?? "form");
       errors[key] ??= issue.message;
     }
-    return { errors };
+    return { errors, values: raw };
   }
 
   // Price on the server from the event's own tiers — never from the form.
   const pricing = priceRegistration(event);
-  if (!pricing.ok) return { formError: pricing.reason };
+  if (!pricing.ok) return { formError: pricing.reason, values: raw };
 
   const data = parsed.data;
 
@@ -92,6 +87,11 @@ export async function registerAction(
       division: data.division || null,
       meal_preference: data.mealPreference || null,
       tshirt_size: data.tshirtSize || null,
+      attendee_type: data.attendeeType || null,
+      vehicle_type: data.vehicleType || null,
+      vehicle_number: data.vehicleNumber,
+      gov_id_type: data.govIdType || null,
+      gov_id_number: data.govIdNumber,
       tier_id: pricing.priced.tierId,
       amount_due_paise: pricing.priced.amountDuePaise,
     });
@@ -111,5 +111,6 @@ export async function registerAction(
   console.error(`[register] insert failed for ${slug}: ${lastError}`);
   return {
     formError: "Something went wrong saving your registration. Please try again.",
+    values: raw,
   };
 }
