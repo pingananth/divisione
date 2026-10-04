@@ -1,5 +1,6 @@
 import { serviceClient } from "./supabase";
 import { isDemoMode } from "./demo";
+import { retryRead } from "./retry";
 import { z } from "zod";
 import type { EventConfig, CustomFieldKey, PriceTier, InfoSection, EventContact } from "./types";
 
@@ -102,11 +103,9 @@ export async function getEventBySlug(slug: string) {
     return slug === DEMO_SLUG ? demoEvent() : null;
   }
 
-  const { data, error } = await serviceClient()
-    .from("events")
-    .select("*")
-    .eq("slug", slug)
-    .maybeSingle();
+  const { data, error } = await retryRead((signal) =>
+    serviceClient().from("events").select("*").eq("slug", slug).abortSignal(signal).maybeSingle(),
+  );
 
   if (error) throw new Error(`Failed to load event "${slug}": ${error.message}`);
   return data ? toEventConfig(data as EventRow) : null;

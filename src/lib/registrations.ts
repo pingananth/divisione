@@ -1,5 +1,6 @@
 import { serviceClient } from "./supabase";
 import { isDemoMode } from "./demo";
+import { retryRead } from "./retry";
 import { toEventConfig } from "./events";
 import type { RegistrationStatus } from "./types";
 
@@ -29,12 +30,15 @@ export async function getRegistrationByTicket(
     return slug === DEMO_SLUG ? await demoGetRegistration(ticketId) : null;
   }
 
-  const { data, error } = await serviceClient()
-    .from("registrations")
-    .select("*, events!inner(*), payment_claims(utr)")
-    .eq("ticket_id", ticketId)
-    .eq("events.slug", slug)
-    .maybeSingle();
+  const { data, error } = await retryRead((signal) =>
+    serviceClient()
+      .from("registrations")
+      .select("*, events!inner(*), payment_claims(utr)")
+      .eq("ticket_id", ticketId)
+      .eq("events.slug", slug)
+      .abortSignal(signal)
+      .maybeSingle(),
+  );
 
   if (error) throw new Error(`Failed to load registration ${ticketId}: ${error.message}`);
   if (!data) return null;
