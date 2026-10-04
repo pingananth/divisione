@@ -48,6 +48,7 @@ export function createSmtpProvider(env: Record<string, string | undefined>): Ema
           subject: message.subject,
           html: message.html,
           text: message.text,
+          replyTo: message.replyTo,
         });
         return { ok: true, providerMessageId: info.messageId ?? null };
       } catch (err: unknown) {

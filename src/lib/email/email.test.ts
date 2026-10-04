@@ -239,3 +239,80 @@ describe("processOutbox", () => {
     ).toEqual({ sent: 0, retried: 0, failed: 0 });
   });
 });
+
+describe("email content", () => {
+  const rich: TemplateData = {
+    ...data,
+    eventVenue: "Lennox India Technology Centre | Zenith - 10th floor | Tharamani, Chennai",
+    contacts: [
+      { name: "TM Kowsalya", role: "Conference Chair", phone: "7010737617" },
+      { name: "TM Rajan", role: "Registration Chair", phone: "8883388222" },
+    ],
+    infoSections: [
+      { heading: "Do's", tone: "do", items: [{ title: "Credentials & ID", text: "Carry your Government ID." }] },
+    ],
+  };
+
+  it("puts each part of the venue on its own line", () => {
+    const m = renderEmail("registration_confirmed", rich);
+    expect(m.html).toContain("Lennox India Technology Centre<br>Zenith - 10th floor<br>Tharamani, Chennai");
+    expect(m.text).toContain("Where: Lennox India Technology Centre, Zenith - 10th floor, Tharamani, Chennai");
+    expect(m.html).not.toContain(" | ");
+  });
+
+  it("lists every contact with role and a tap-to-call link", () => {
+    for (const t of ["registration_received", "registration_confirmed", "payment_needs_attention"] as const) {
+      const m = renderEmail(t, rich);
+      expect(m.html).toContain('href="tel:+918883388222"');
+      expect(m.text).toContain("TM Rajan (Registration Chair): 88833 88222");
+      expect(m.text).toContain("TM Kowsalya (Conference Chair): 70107 37617");
+    }
+  });
+
+  it("includes Do's and Don'ts in the confirmation only", () => {
+    expect(renderEmail("registration_confirmed", rich).text).toContain("Credentials & ID: Carry your Government ID.");
+    expect(renderEmail("registration_received", rich).text).not.toContain("Credentials & ID");
+  });
+
+  it("renders without the optional blocks for older queued emails", () => {
+    const m = renderEmail("registration_confirmed", data);
+    expect(m.text).not.toContain("Any queries");
+    expect(m.text).toContain("You can also reply to this email");
+  });
+
+  it("no longer promises a day-or-two wait", () => {
+    expect(renderEmail("registration_received", data).text).not.toMatch(/day or two/);
+  });
+
+  it("escapes contact and guideline text", () => {
+    const m = renderEmail("registration_confirmed", {
+      ...rich,
+      contacts: [{ name: "<b>x</b>", phone: "7010737617" }],
+      infoSections: [{ heading: "<i>h</i>", tone: "info", items: [{ text: "<script>1</script>" }] }],
+    });
+    expect(m.html).not.toMatch(/<b>x<\/b>|<i>h<\/i>|<script>/);
+  });
+});
+
+describe("reply-to", () => {
+  it("sends replies to the event's support email", async () => {
+    const { store } = fakeStore([entry("a")]);
+    const send = vi.fn(async () => ({ ok: true, providerMessageId: null }) as SendResult);
+    await processOutbox(store, { name: "spy", verify: async () => ({ ok: true, detail: "" }), send });
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ replyTo: "divisione@d229.org" }));
+  });
+
+  it("is passed to Brevo and Resend in their own field names", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ id: "1", messageId: "1" }), { status: 200 });
+    });
+    const msg = { to: "a@x.org", subject: "s", html: "h", text: "t", replyTo: "chair@x.org" };
+    await createEmailProvider({ EMAIL_PROVIDER: "brevo", BREVO_API_KEY: "k", EMAIL_FROM: "f@x.org" }).send(msg);
+    await createEmailProvider({ EMAIL_PROVIDER: "resend", RESEND_API_KEY: "k", EMAIL_FROM: "f@x.org" }).send(msg);
+    fetchSpy.mockRestore();
+    expect(bodies[0].replyTo).toEqual({ email: "chair@x.org" });
+    expect(bodies[1].reply_to).toBe("chair@x.org");
+  });
+});

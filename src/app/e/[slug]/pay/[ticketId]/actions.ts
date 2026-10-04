@@ -93,6 +93,7 @@ export async function submitUtrAction(
       amountPaise: registration.amountDuePaise,
       utr: parsed.data.utr,
       supportEmail: registration.event.supportEmail,
+      contacts: registration.event.contacts,
     },
   });
 

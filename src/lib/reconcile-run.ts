@@ -1,7 +1,7 @@
 import { serviceClient } from "./supabase";
 import { reconcile, summarise, type MatchOutcome } from "./reconcile";
 import { outboxKey } from "./email/outbox";
-import { formatEventDate } from "./events";
+import { formatEventDate, parseContacts, parseInfoSections } from "./events";
 import { formatPaise } from "./pricing";
 import type { Credit, PaymentClaim } from "./types";
 
@@ -50,6 +50,9 @@ type EventRow = {
   starts_at: string;
   support_email: string;
   account_last4: string | null;
+  slug: string;
+  contacts: unknown;
+  info_sections: unknown;
 };
 
 /** Pending registrations that submitted a UTR, as the rules expect them. */
@@ -116,7 +119,7 @@ export async function runReconciliation(
 
   const { data: eventData, error: eventError } = await db
     .from("events")
-    .select("title, venue, starts_at, support_email, account_last4")
+    .select("title, venue, starts_at, support_email, account_last4, slug, contacts, info_sections")
     .eq("id", eventId)
     .single();
   if (eventError) throw new Error(`Failed to load event: ${eventError.message}`);
@@ -224,6 +227,8 @@ export async function runReconciliation(
           amountPaise: reg.amount_due_paise,
           utr: outcome.utr,
           supportEmail: event.support_email,
+          contacts: parseContacts(event.contacts, event.slug),
+          infoSections: parseInfoSections(event.info_sections, event.slug),
         },
       };
     });

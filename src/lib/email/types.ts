@@ -3,6 +3,11 @@ export type EmailMessage = {
   subject: string;
   html: string;
   text: string;
+  /**
+   * Where replies go. The sending address is usually not a monitored inbox,
+   * and every email invites the member to reply.
+   */
+  replyTo?: string;
 };
 
 export type SendResult =

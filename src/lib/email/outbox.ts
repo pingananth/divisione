@@ -55,7 +55,11 @@ export async function processOutbox(
   const summary: ProcessSummary = { sent: 0, retried: 0, failed: 0 };
 
   for (const entry of due) {
-    const message = { ...renderEmail(entry.template, entry.data), to: entry.to };
+    const message = {
+      ...renderEmail(entry.template, entry.data),
+      to: entry.to,
+      replyTo: entry.data.supportEmail || undefined,
+    };
     const result = await provider.send(message);
 
     if (result.ok) {

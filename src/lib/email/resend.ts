@@ -33,6 +33,7 @@ export function createResendProvider(env: Record<string, string | undefined>): E
             subject: message.subject,
             html: message.html,
             text: message.text,
+            ...(message.replyTo ? { reply_to: message.replyTo } : {}),
           }),
         });
 

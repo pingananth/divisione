@@ -31,6 +31,7 @@ export function createBrevoProvider(env: Record<string, string | undefined>): Em
             subject: message.subject,
             htmlContent: message.html,
             textContent: message.text,
+            ...(message.replyTo ? { replyTo: { email: message.replyTo } } : {}),
           }),
         });
 

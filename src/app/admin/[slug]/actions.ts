@@ -10,7 +10,7 @@ import {
   type RunSummary,
 } from "@/lib/reconcile-run";
 import { outboxKey } from "@/lib/email/outbox";
-import { formatEventDate } from "@/lib/events";
+import { formatEventDate, parseContacts, parseInfoSections } from "@/lib/events";
 
 export type ActionState = { error?: string; message?: string };
 
@@ -27,7 +27,7 @@ async function authorise(slug: string) {
 
   const { data, error } = await db
     .from("events")
-    .select("id, title, venue, starts_at, support_email, account_last4")
+    .select("id, title, venue, starts_at, support_email, account_last4, contacts, info_sections")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -241,6 +241,10 @@ export async function reviewRegistrationAction(
         amountPaise: reg.amount_due_paise,
         reason: note || undefined,
         supportEmail: auth.event.support_email,
+        contacts: parseContacts(auth.event.contacts, slug),
+        // Guidelines belong with a confirmation, not a rejection.
+        infoSections:
+          template === "registration_confirmed" ? parseInfoSections(auth.event.info_sections, slug) : undefined,
       },
     },
     { onConflict: "idempotency_key", ignoreDuplicates: true },
