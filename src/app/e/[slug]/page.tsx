@@ -94,35 +94,6 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
         </dl>
       </header>
 
-      <section className={`mt-8 ${card}`} aria-label="Registration">
-        {closed ? (
-          <div>
-            <h2 className="text-lg font-semibold">Registration is closed</h2>
-            <p className="mt-2 text-zinc-600 dark:text-zinc-300">
-              Registration for this conference is no longer open. Please contact{" "}
-              <a className="text-ti-blue underline" href={`mailto:${event.supportEmail}`}>
-                {event.supportEmail}
-              </a>{" "}
-              if you think this is a mistake.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="mb-6 flex items-baseline justify-between border-b border-zinc-200 pb-4 dark:border-zinc-700">
-              <div>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">{tier.label}</p>
-                <p className="text-2xl font-bold">{formatPaise(tier.amountPaise)}</p>
-              </div>
-              <p className="text-right text-xs text-zinc-500 dark:text-zinc-400">
-                Paid by UPI.
-                <br />
-                No booking fee.
-              </p>
-            </div>
-            <RegistrationForm slug={slug} enabledFields={event.enabledFields} />
-          </>
-        )}
-      </section>
 
       {sections.length > 0 ? (
         <section className="mt-8" aria-labelledby="guidelines-heading">
@@ -182,6 +153,38 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           </ul>
         </section>
       ) : null}
+
+      {/* Form goes last: once members start it and press Continue they move
+          on to payment and never scroll back for the details above. */}
+      <section className={`mt-8 ${card}`} aria-label="Registration" id="register">
+        {closed ? (
+          <div>
+            <h2 className="text-lg font-semibold">Registration is closed</h2>
+            <p className="mt-2 text-zinc-600 dark:text-zinc-300">
+              Registration for this conference is no longer open. Please contact{" "}
+              <a className="text-ti-blue underline" href={`mailto:${event.supportEmail}`}>
+                {event.supportEmail}
+              </a>{" "}
+              if you think this is a mistake.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="mb-6 flex items-baseline justify-between border-b border-zinc-200 pb-4 dark:border-zinc-700">
+              <div>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">{tier.label}</p>
+                <p className="text-2xl font-bold">{formatPaise(tier.amountPaise)}</p>
+              </div>
+              <p className="text-right text-xs text-zinc-500 dark:text-zinc-400">
+                Paid by UPI.
+                <br />
+                No booking fee.
+              </p>
+            </div>
+            <RegistrationForm slug={slug} enabledFields={event.enabledFields} />
+          </>
+        )}
+      </section>
     </main>
   );
 }
