@@ -7,7 +7,8 @@
 
 update events
 set tiers = $json$[
-  { "id": "student",     "ticket": "student",     "label": "Student",     "amountPaise": 17500, "endsAt": null },
+  { "id": "student",     "ticket": "student",     "label": "Student",     "amountPaise": 17500, "endsAt": null,
+    "note": "Student ID card is required for approval" },
   { "id": "toastmaster", "ticket": "toastmaster", "label": "Toastmaster", "amountPaise": 34900, "endsAt": null },
   { "id": "guest",       "ticket": "guest",       "label": "Guest",       "amountPaise": 47900, "endsAt": null }
 ]$json$::jsonb

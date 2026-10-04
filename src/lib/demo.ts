@@ -46,7 +46,7 @@ const demoEventRow = {
   upi_payee_name: "Division E Contest",
   ref_prefix: "E",
   tiers: [
-    { id: "student", ticket: "student", label: "Student", amountPaise: 15000, endsAt: null },
+    { id: "student", ticket: "student", label: "Student", amountPaise: 15000, endsAt: null, note: "Student ID card is required for approval" },
     { id: "toastmaster-early", ticket: "toastmaster", label: "Toastmaster (early bird)", amountPaise: 25000, endsAt: "2026-10-20T23:59:59+05:30" },
     { id: "toastmaster", ticket: "toastmaster", label: "Toastmaster", amountPaise: 30000, endsAt: null },
     { id: "guest", ticket: "guest", label: "Guest", amountPaise: 40000, endsAt: null },

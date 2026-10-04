@@ -18,6 +18,8 @@ export type PriceTier = {
    * so a plain early-bird/regular event offers no choice at all.
    */
   ticket?: string;
+  /** Short condition shown under the ticket, e.g. "Student ID card required". */
+  note?: string;
 };
 
 export type CustomFieldKey =

@@ -176,6 +176,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 {tickets.length === 1 ? (
                   <>
                     <p className="text-sm text-zinc-500 dark:text-zinc-400">{tickets[0].label}</p>
+                    {tickets[0].note ? (
+                      <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{tickets[0].note}</p>
+                    ) : null}
                     <p className="text-2xl font-bold">{formatPaise(tickets[0].amountPaise)}</p>
                   </>
                 ) : (
@@ -194,7 +197,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             <RegistrationForm
               slug={slug}
               enabledFields={event.enabledFields}
-              tickets={tickets.map((t) => ({ id: t.id, label: t.label, amountPaise: t.amountPaise }))}
+              tickets={tickets.map((t) => ({ id: t.id, label: t.label, amountPaise: t.amountPaise, note: t.note }))}
             />
           </>
         )}

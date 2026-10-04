@@ -66,7 +66,7 @@ function Choice({
   legend: string;
   /** One option per row, for longer labels such as ticket names with prices. */
   stacked?: boolean;
-  options: readonly { value: string; label: string }[];
+  options: readonly { value: string; label: string; hint?: string }[];
   value: string;
   onChange?: (value: string) => void;
   error?: string;
@@ -78,7 +78,7 @@ function Choice({
         {options.map((o) => (
           <label
             key={o.value}
-            className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2.5 text-sm has-[:checked]:border-ti-blue has-[:checked]:bg-ti-blue/5 dark:border-zinc-700 dark:has-[:checked]:border-sky-400 dark:has-[:checked]:bg-sky-400/10"
+            className="flex cursor-pointer items-start gap-2 rounded-lg border border-zinc-300 px-3 py-2.5 text-sm has-[:checked]:border-ti-blue has-[:checked]:bg-ti-blue/5 dark:border-zinc-700 dark:has-[:checked]:border-sky-400 dark:has-[:checked]:bg-sky-400/10"
           >
             <input
               type="radio"
@@ -86,9 +86,16 @@ function Choice({
               value={o.value}
               defaultChecked={value === o.value}
               onChange={() => onChange?.(o.value)}
-              className="accent-ti-blue"
+              className="mt-0.5 accent-ti-blue"
             />
-            {o.label}
+            <span>
+              {o.label}
+              {o.hint ? (
+                <span className="mt-0.5 block text-xs font-medium text-amber-700 dark:text-amber-300">
+                  {o.hint}
+                </span>
+              ) : null}
+            </span>
           </label>
         ))}
       </div>
@@ -117,7 +124,7 @@ export function RegistrationForm({
   slug: string;
   enabledFields: CustomFieldKey[];
   /** Tickets on sale right now. A choice is shown only when there is more than one. */
-  tickets?: { id: string; label: string; amountPaise: number }[];
+  tickets?: { id: string; label: string; amountPaise: number; note?: string }[];
 }) {
   const action = registerAction.bind(null, slug);
   const [state, formAction, pending] = useActionState<RegisterState, FormData>(action, {});
@@ -164,7 +171,11 @@ export function RegistrationForm({
         <Choice
           name="ticket"
           legend="Ticket"
-          options={tickets.map((t) => ({ value: t.id, label: `${t.label} — ${formatPaise(t.amountPaise)}` }))}
+          options={tickets.map((t) => ({
+            value: t.id,
+            label: `${t.label} — ${formatPaise(t.amountPaise)}`,
+            hint: t.note,
+          }))}
           value={values.ticket ?? ""}
           error={errors.ticket}
           stacked
