@@ -36,6 +36,23 @@ export type EventConfig = {
   tiers: PriceTier[];
   enabledFields: CustomFieldKey[];
   registrationOpen: boolean;
+  /** One line under the conference name, e.g. the contest it hosts. */
+  subtitle?: string | null;
+  /** Intro paragraph shown above the registration form. */
+  description?: string | null;
+  /** Guideline blocks such as Do's and Don'ts. */
+  infoSections?: InfoSection[];
+  /** Person members can call with questions. */
+  contactName?: string | null;
+  /** 10-digit Indian mobile, digits only. */
+  contactPhone?: string | null;
+};
+
+export type InfoSection = {
+  heading: string;
+  /** Only changes styling: green for do, red for dont, neutral for info. */
+  tone: "do" | "dont" | "info";
+  items: { title?: string; text: string }[];
 };
 
 export type RegistrationStatus = "pending" | "confirmed" | "rejected";

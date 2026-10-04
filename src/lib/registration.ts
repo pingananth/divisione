@@ -43,35 +43,59 @@ const baseSchema = z.object({
 
 export type RegistrationInput = z.infer<typeof baseSchema>;
 
+const FIELD_LABELS: Record<CustomFieldKey, string> = {
+  club: "Club",
+  area: "Area",
+  division: "Division",
+  mealPreference: "Meal preference",
+  tshirtSize: "T-shirt size",
+};
+
+/** Values a field may take when the organiser has turned it on. */
+const FIELD_VALUES: Record<CustomFieldKey, z.ZodType<string, string>> = {
+  club: z.string().trim().max(120),
+  area: z.string().trim().max(40),
+  division: z.string().trim().max(40),
+  mealPreference: z.enum(MEAL_PREFERENCES),
+  tshirtSize: z.enum(TSHIRT_SIZES),
+};
+
 /**
  * Build a validator for one event. Fields the organiser enabled become
  * required; fields they did not enable are rejected outright rather than
  * silently stored, so a stale form cannot write data the event does not
  * collect.
+ *
+ * Each field carries its own rule, so every problem is reported in one go.
+ * (A whole-form refinement only runs once the basic fields pass, which made
+ * members fix name/email/phone, resubmit, and only then hear about the rest.)
  */
 export function registrationSchema(enabledFields: CustomFieldKey[]) {
   const enabled = new Set(enabledFields);
 
-  return baseSchema.superRefine((value, ctx) => {
-    const check = (key: CustomFieldKey, label: string) => {
-      const present = typeof value[key] === "string" && value[key] !== "";
-      if (enabled.has(key) && !present) {
-        ctx.addIssue({ code: "custom", path: [key], message: `${label} is required` });
-      }
-      if (!enabled.has(key) && present) {
-        ctx.addIssue({
-          code: "custom",
-          path: [key],
-          message: `${label} is not collected for this event`,
-        });
-      }
-    };
+  const field = (key: CustomFieldKey): z.ZodType<string | undefined, unknown> => {
+    const label = FIELD_LABELS[key];
+    if (!enabled.has(key)) {
+      return z
+        .string()
+        .optional()
+        .refine((v) => v === undefined || v.trim() === "", `${label} is not collected for this event`);
+    }
+    return z.preprocess(
+      (v) => (typeof v === "string" ? v.trim() : v),
+      z
+        .string({ error: `${label} is required` })
+        .min(1, `${label} is required`)
+        .pipe(FIELD_VALUES[key]),
+    );
+  };
 
-    check("club", "Club");
-    check("area", "Area");
-    check("division", "Division");
-    check("mealPreference", "Meal preference");
-    check("tshirtSize", "T-shirt size");
+  return baseSchema.extend({
+    club: field("club"),
+    area: field("area"),
+    division: field("division"),
+    mealPreference: field("mealPreference"),
+    tshirtSize: field("tshirtSize"),
   });
 }
 

@@ -27,23 +27,60 @@ export function isDemoMode(): boolean {
 
 export const DEMO_SLUG = "demo";
 
+/**
+ * Mirrors a real event's shape, including the optional page content, so the
+ * full page layout can be reviewed without a database.
+ */
 const demoEventRow = {
   id: "demo-event",
   slug: DEMO_SLUG,
-  title: "Division E Annual Conference 2026 (Demo)",
-  venue: "Chennai Trade Centre, Nandambakkam",
-  starts_at: "2026-10-04T09:00:00+05:30",
-  ends_at: "2026-10-04T18:00:00+05:30",
+  title: "Exuberance'26 (Demo)",
+  subtitle: "Division A Humorous Speech & Evaluation Contest",
+  description:
+    "We’re excited to host the Division A Humorous Speech & Evaluation Contest, and we look forward to welcoming Contestants, Role Players, and Guests to this vibrant event.",
+  venue:
+    "Lennox India Technology Centre | Capital Land Phase 3 - Zenith - 10th floor | CSIR Road, Tharamani, Chennai",
+  starts_at: "2026-10-31T09:00:00+05:30",
+  ends_at: "2026-10-31T18:00:00+05:30",
   upi_vpa: "demo@okhdfcbank",
-  upi_payee_name: "Division E Conference",
-  ref_prefix: "E",
-  tiers: [
-    { id: "early", label: "Early bird", amountPaise: 25000, endsAt: "2026-09-25T23:59:59+05:30" },
-    { id: "regular", label: "Regular", amountPaise: 30000, endsAt: null },
-  ],
-  enabled_fields: ["club", "area", "division", "mealPreference", "tshirtSize"],
-  support_email: "divisione@example.org",
+  upi_payee_name: "Division A Contest",
+  ref_prefix: "A",
+  tiers: [{ id: "regular", label: "Registration", amountPaise: 30000, endsAt: null }],
+  enabled_fields: ["club", "area", "division", "mealPreference"],
+  support_email: "demo@example.org",
   registration_open: true,
+  info_sections: [
+    {
+      heading: "Do's",
+      tone: "do",
+      items: [
+        {
+          title: "Credentials & ID",
+          text: "Kindly carry your Government ID with you while attending the conference.",
+        },
+        {
+          title: "Escort & Support",
+          text: "Request a Lennox employee to escort you when visiting vending machines or navigating between floors.",
+        },
+      ],
+    },
+    {
+      heading: "Don'ts",
+      tone: "dont",
+      items: [
+        {
+          title: "Prohibited Items",
+          text: "Do not bring unapproved electronics (laptops, power banks, non-mobile cameras, USB drives, or HDMI cables) or flammable materials into the facility.",
+        },
+        {
+          title: "Photography & Media",
+          text: "Do not record any video footage on office grounds or take photos that capture Lennox logos.",
+        },
+      ],
+    },
+  ],
+  contact_name: "TM Kowsalya",
+  contact_phone: "7010737617",
 };
 
 export function demoEvent(): EventConfig & { supportEmail: string } {

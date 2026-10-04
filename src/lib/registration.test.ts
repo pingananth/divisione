@@ -187,3 +187,33 @@ describe("explainBadUtr", () => {
     expect(r.success && r.data.utr).toBe("412345678901");
   });
 });
+
+describe("registrationSchema reports every problem at once", () => {
+  const issuesFor = (fields: Parameters<typeof registrationSchema>[0], input: object) => {
+    const r = registrationSchema(fields).safeParse(input);
+    return r.success ? [] : r.error.issues.map((i) => String(i.path[0]));
+  };
+
+  it("flags every empty mandatory field in a single submit", () => {
+    const empty = { fullName: "", email: "", phone: "", club: "", area: "", division: "", mealPreference: "" };
+    expect(issuesFor(["club", "area", "division", "mealPreference"], empty).sort()).toEqual(
+      ["area", "club", "division", "email", "fullName", "mealPreference", "phone"].sort(),
+    );
+  });
+
+  it("does not ask for a T-shirt size when the event does not collect it", () => {
+    const r = registrationSchema(["club", "area", "division", "mealPreference"]).safeParse({
+      ...valid,
+      tshirtSize: "",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("treats a field of only spaces as missing", () => {
+    expect(issuesFor(["club"], { ...valid, club: "   " })).toContain("club");
+  });
+
+  it("still rejects a meal preference that is not on the list", () => {
+    expect(issuesFor([...allFields], { ...valid, mealPreference: "Pizza" })).toContain("mealPreference");
+  });
+});

@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { getRegistrationByTicket } from "@/lib/registrations";
 import { buildUpiIntentUrl, buildReference } from "@/lib/upi";
 import { formatPaise } from "@/lib/pricing";
+import { formatPhone } from "@/lib/events";
 import { UtrForm } from "./UtrForm";
 
 export const dynamic = "force-dynamic";
@@ -87,9 +88,18 @@ export default async function PayPage({
 
       <p className="mt-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
         Stuck?{" "}
-        <a className="text-ti-blue underline" href={`mailto:${event.supportEmail}`}>
-          {event.supportEmail}
-        </a>
+        {event.contactPhone ? (
+          <>
+            Call {event.contactName ?? "the registration desk"} on{" "}
+            <a className="text-ti-blue underline" href={`tel:+91${event.contactPhone}`}>
+              {formatPhone(event.contactPhone)}
+            </a>
+          </>
+        ) : (
+          <a className="text-ti-blue underline" href={`mailto:${event.supportEmail}`}>
+            {event.supportEmail}
+          </a>
+        )}
       </p>
     </main>
   );
