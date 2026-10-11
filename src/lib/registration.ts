@@ -327,6 +327,38 @@ export function explainBadUtr(input: string): string | null {
   return "A UPI reference is exactly 12 digits — check your UPI app's transaction details.";
 }
 
+export type PaymentReference =
+  | { ok: true; utr: string | null; appRef: string | null }
+  | { ok: false; error: string };
+
+/**
+ * Read whatever reference a member typed. A 12-digit UTR can be matched
+ * automatically. Some apps (an ICICI member's, for one) show only their own
+ * alphanumeric ID; that is accepted as-is for an organiser to check by hand.
+ * Blank is allowed here — the caller decides whether a screenshot covers it.
+ */
+export function parsePaymentReference(input: string): PaymentReference {
+  const trimmed = input.trim();
+  if (!trimmed) return { ok: true, utr: null, appRef: null };
+
+  const problem = explainBadUtr(trimmed);
+  const compact = trimmed.replace(/\s+/g, "");
+  const unlabelled = compact.replace(/^(utr|rrn|upiref(no)?)[:.\-]*/i, "");
+  const hasLetters = /[a-z]/i.test(unlabelled);
+
+  // 12 digits with nothing else is a UTR. Letters mixed in means it is some
+  // app's own ID that merely happens to contain twelve digits.
+  if (!problem && !hasLetters) return { ok: true, utr: trimmed.replace(/\D/g, ""), appRef: null };
+
+  // Google Pay and PhonePe always show the real UTR as well, so their own IDs
+  // are still refused. A plain number of the wrong length is a typo.
+  const appSpecific = /^T\d{15,}$/i.test(compact) || /^CIC/i.test(compact);
+  if (appSpecific || !hasLetters || !/^[A-Za-z0-9\-/]{4,40}$/.test(unlabelled)) {
+    return { ok: false, error: problem ?? "Please check the reference in your UPI app." };
+  }
+  return { ok: true, utr: null, appRef: unlabelled.toUpperCase() };
+}
+
 export const utrSchema = z.object({
   utr: z
     .string()

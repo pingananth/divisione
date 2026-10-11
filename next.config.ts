@@ -6,6 +6,13 @@ const nextConfig: NextConfig = {
   // to test UPI payments. Without it, Next.js blocks the live-reload connection
   // from that address and keeps reloading the page, which aborts form submits.
   allowedDevOrigins: ["192.168.*.*"],
+  experimental: {
+    serverActions: {
+      // Payment screenshots. The browser shrinks them to a few hundred KB
+      // first; this leaves room for a phone that can't.
+      bodySizeLimit: "3mb",
+    },
+  },
   async redirects() {
     return [
       {

@@ -2,12 +2,13 @@
 
 import { redirect } from "next/navigation";
 import { getRegistrationByTicket } from "@/lib/registrations";
-import { utrSchema } from "@/lib/registration";
+import { parsePaymentReference } from "@/lib/registration";
 import { serviceClient } from "@/lib/supabase";
 import { outboxKey } from "@/lib/email/outbox";
 import { formatEventDate } from "@/lib/events";
 import { isDemoMode } from "@/lib/demo";
 import { runReconciliation } from "@/lib/reconcile-run";
+import { MAX_SCREENSHOT_BYTES, SCREENSHOT_BUCKET, SCREENSHOT_TYPES } from "@/lib/screenshots";
 
 export type UtrState = { error?: string };
 
@@ -20,26 +21,63 @@ export async function submitUtrAction(
   const registration = await getRegistrationByTicket(slug, ticketId);
   if (!registration) return { error: "This registration could not be found." };
 
-  if (registration.claimedUtr) {
+  if (registration.hasClaim) {
     // Already submitted — send them on rather than showing a confusing error.
     redirect(`/e/${slug}/done/${ticketId}`);
   }
 
-  const parsed = utrSchema.safeParse({ utr: String(formData.get("utr") ?? "") });
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const reference = parsePaymentReference(String(formData.get("utr") ?? ""));
+  if (!reference.ok) return { error: reference.error };
+  const { utr, appRef } = reference;
+
+  const file = formData.get("screenshot");
+  const screenshot = file instanceof File && file.size > 0 ? file : null;
+  if (screenshot) {
+    if (!SCREENSHOT_TYPES[screenshot.type]) {
+      return { error: "The screenshot must be a JPG, PNG or WebP image." };
+    }
+    if (screenshot.size > MAX_SCREENSHOT_BYTES) {
+      return { error: "That screenshot is too large. Please crop it or take a new one." };
+    }
+  }
+
+  if (!utr && !appRef && !screenshot) {
+    return { error: "Enter the UPI reference, or upload a screenshot of the payment." };
+  }
 
   if (isDemoMode()) {
     const { demoSubmitUtr } = await import("@/lib/demo");
-    const result = await demoSubmitUtr(ticketId, parsed.data.utr);
+    const result = await demoSubmitUtr(ticketId, { utr, appRef });
     if (!result.ok) return { error: result.error };
     redirect(`/e/${slug}/done/${ticketId}`);
   }
 
   const db = serviceClient();
 
+  let screenshotPath: string | null = null;
+  if (screenshot) {
+    // Timestamped so a retry after a failed insert never collides.
+    const path = `${slug}/${ticketId}-${Date.now()}.${SCREENSHOT_TYPES[screenshot.type]}`;
+    const { error: uploadError } = await db.storage
+      .from(SCREENSHOT_BUCKET)
+      .upload(path, screenshot, { contentType: screenshot.type, upsert: false });
+    if (uploadError) {
+      console.error(`[submitUtr] screenshot upload failed for ${ticketId}: ${uploadError.message}`);
+      // A typed reference still stands on its own; without one the screenshot
+      // is the only proof, so the member has to try again.
+      if (!utr && !appRef) {
+        return { error: "We couldn't save your screenshot. Please try again." };
+      }
+    } else {
+      screenshotPath = path;
+    }
+  }
+
   const { error } = await db.from("payment_claims").insert({
     registration_id: registration.id,
-    utr: parsed.data.utr,
+    utr,
+    app_ref: appRef,
+    screenshot_path: screenshotPath,
   });
 
   if (error) {
@@ -57,20 +95,39 @@ export async function submitUtrAction(
     return { error: "Something went wrong saving your reference. Please try again." };
   }
 
-  // Match straight away: if the bank has already reported this payment, the
-  // member is confirmed before the page even loads. A failure here must never
-  // cost the member their submission — the scheduled run will pick it up.
   let confirmedNow = false;
-  try {
-    await runReconciliation(registration.event.id, { trigger: "utr_submitted" });
-    const { data: after } = await db
+  if (utr) {
+    // Match straight away: if the bank has already reported this payment, the
+    // member is confirmed before the page even loads. A failure here must never
+    // cost the member their submission — the scheduled run will pick it up.
+    try {
+      await runReconciliation(registration.event.id, { trigger: "utr_submitted" });
+      const { data: after } = await db
+        .from("registrations")
+        .select("status")
+        .eq("id", registration.id)
+        .single();
+      confirmedNow = after?.status === "confirmed";
+    } catch (err) {
+      console.error(`[submitUtr] immediate matching failed for ${ticketId}:`, err);
+    }
+  } else {
+    // Without a UTR the rules can never decide, so send it straight to an
+    // organiser instead of leaving it looking unpaid.
+    const { error: flagError } = await db
       .from("registrations")
-      .select("status")
+      .update({
+        match_status: "manual_check",
+        match_detail: appRef
+          ? `No 12-digit UTR. Their app shows ${appRef}${screenshotPath ? " — see the screenshot" : ""}.`
+          : "No UTR given — check the screenshot against the bank.",
+        match_checked_at: new Date().toISOString(),
+      })
       .eq("id", registration.id)
-      .single();
-    confirmedNow = after?.status === "confirmed";
-  } catch (err) {
-    console.error(`[submitUtr] immediate matching failed for ${ticketId}:`, err);
+      .eq("status", "pending");
+    if (flagError) {
+      console.error(`[submitUtr] failed to flag ${ticketId} for review: ${flagError.message}`);
+    }
   }
 
   // Already confirmed means the confirmation email is queued; a "we're
@@ -91,7 +148,7 @@ export async function submitUtrAction(
       eventStartsAt: formatEventDate(registration.event.startsAt),
       ticketId: registration.ticketId,
       amountPaise: registration.amountDuePaise,
-      utr: parsed.data.utr,
+      utr: utr ?? appRef ?? undefined,
       supportEmail: registration.event.supportEmail,
       contacts: registration.event.contacts,
     },

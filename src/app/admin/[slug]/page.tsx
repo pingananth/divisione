@@ -7,6 +7,8 @@ import { formatPaise } from "@/lib/pricing";
 import { REVIEW_KINDS, type OutcomeKind } from "@/lib/reconcile";
 import { optionLabel, ATTENDEE_TYPES } from "@/lib/registration";
 import { formatEventDate } from "@/lib/events";
+import { serviceClient } from "@/lib/supabase";
+import { SCREENSHOT_BUCKET, SCREENSHOT_LINK_SECONDS } from "@/lib/screenshots";
 import { UploadStatementForm, ReconcileButton, ReviewForm } from "./AdminForms";
 
 export const dynamic = "force-dynamic";
@@ -24,10 +26,50 @@ type RegistrationRow = {
   status: "pending" | "confirmed" | "rejected";
   review_note: string | null;
   created_at: string;
-  match_status: OutcomeKind | null;
+  // manual_check: no 12-digit UTR, set when the member submits.
+  match_status: OutcomeKind | "manual_check" | null;
   match_detail: string | null;
-  payment_claims: { utr: string; matched_at: string | null; created_at: string }[] | null;
+  payment_claims:
+    | {
+        utr: string | null;
+        app_ref: string | null;
+        screenshot_path: string | null;
+        matched_at: string | null;
+        created_at: string;
+      }[]
+    | null;
 };
+
+const claimOf = (r: RegistrationRow) => r.payment_claims?.[0] ?? null;
+
+/** What to show as the payment reference. */
+function refText(r: RegistrationRow): string {
+  const c = claimOf(r);
+  return c?.utr ?? c?.app_ref ?? (c?.screenshot_path ? "screenshot" : "—");
+}
+
+/** Pending rows the rules cannot or would not confirm, so a person must. */
+function needsHuman(r: RegistrationRow): boolean {
+  if (!claimOf(r)?.utr) return true; // No UTR to match — only a person can check it.
+  return (
+    r.match_status === "manual_check" ||
+    (r.match_status !== null && REVIEW_KINDS.has(r.match_status))
+  );
+}
+
+function ScreenshotLink({ url }: { url: string | undefined }) {
+  if (!url) return null;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-sm font-medium text-ti-blue underline dark:text-sky-400"
+    >
+      View screenshot
+    </a>
+  );
+}
 
 /** "3 h ago" / "2 d ago" — how long a registration has been waiting. */
 function ago(iso: string): string {
@@ -71,7 +113,7 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
     db
       .from("registrations")
       .select(
-        "id, ticket_id, full_name, email, phone, club, attendee_type, tier_id, amount_due_paise, status, review_note, created_at, match_status, match_detail, payment_claims(utr, matched_at, created_at)",
+        "id, ticket_id, full_name, email, phone, club, attendee_type, tier_id, amount_due_paise, status, review_note, created_at, match_status, match_detail, payment_claims(utr, app_ref, screenshot_path, matched_at, created_at)",
       )
       .eq("event_id", event.id)
       .order("created_at", { ascending: false }),
@@ -88,21 +130,37 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
 
   const confirmed = registrations.filter((r) => r.status === "confirmed");
   const pending = registrations.filter((r) => r.status === "pending");
-  const submitted = pending.filter((r) => r.payment_claims?.[0]?.utr);
-  // Only decisions the rules refused to make reach a human. Everything else
-  // that has a reference is simply waiting for the bank to report it.
-  const awaitingReview = submitted.filter(
-    (r) => r.match_status !== null && REVIEW_KINDS.has(r.match_status),
-  );
-  const waitingForBank = submitted.filter(
-    (r) => r.match_status === null || !REVIEW_KINDS.has(r.match_status),
-  );
-  const awaitingPayment = pending.filter((r) => !r.payment_claims?.[0]?.utr);
-  // Main table: anyone with a decision or a payment reference. Registrations
+  const submitted = pending.filter((r) => claimOf(r));
+  // Only decisions the rules refused to make, and payments with no UTR to
+  // match, reach a human. Everything else is waiting for the bank to report it.
+  const awaitingReview = submitted.filter(needsHuman);
+  const waitingForBank = submitted.filter((r) => !needsHuman(r));
+  const awaitingPayment = pending.filter((r) => !claimOf(r));
+  // Main table: anyone with a decision or a payment claim. Registrations
   // that never paid get their own list, so they don't crowd out real payments.
-  const withPayment = registrations.filter(
-    (r) => r.status !== "pending" || r.payment_claims?.[0]?.utr,
-  );
+  const withPayment = registrations.filter((r) => r.status !== "pending" || claimOf(r));
+
+  // Screenshots sit in a private bucket; organisers get short-lived links.
+  // The paths come from rows RLS already let this organiser read.
+  const screenshotPaths = withPayment
+    .map((r) => claimOf(r)?.screenshot_path)
+    .filter((p): p is string => !!p);
+  const screenshotUrl = new Map<string, string>();
+  if (screenshotPaths.length > 0) {
+    const { data: signed, error: signError } = await serviceClient()
+      .storage.from(SCREENSHOT_BUCKET)
+      .createSignedUrls(screenshotPaths, SCREENSHOT_LINK_SECONDS);
+    if (signError) {
+      console.error(`[admin/${slug}] could not sign screenshot links: ${signError.message}`);
+    }
+    for (const link of signed ?? []) {
+      if (link.path && link.signedUrl) screenshotUrl.set(link.path, link.signedUrl);
+    }
+  }
+  const shotFor = (r: RegistrationRow) => {
+    const path = claimOf(r)?.screenshot_path;
+    return path ? screenshotUrl.get(path) : undefined;
+  };
   const ticketLabel = new Map(
     ((event.tiers ?? []) as { id: string; label: string }[]).map((t) => [t.id, t.label]),
   );
@@ -165,8 +223,8 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
         <section className="mt-6 rounded-2xl bg-white ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700 p-6 shadow-sm">
           <h2 className="text-lg font-semibold">Needs review ({awaitingReview.length})</h2>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            The rules would not confirm these on their own. The reason is shown on each — check it
-            against your bank before deciding.
+            The rules would not confirm these on their own, or the member had no 12-digit UTR. The
+            reason is shown on each — check it against your bank before deciding.
           </p>
           <ul className="mt-4 divide-y divide-zinc-200 dark:divide-zinc-700">
             {awaitingReview.map((r) => (
@@ -178,7 +236,7 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
                   </span>
                   <span className="text-sm text-zinc-500 dark:text-zinc-400">
                     owes {formatPaise(r.amount_due_paise)} · ref{" "}
-                    <span className="font-mono">{r.payment_claims?.[0]?.utr}</span>
+                    <span className="font-mono">{refText(r)}</span>
                   </span>
                 </div>
                 {r.match_detail ? (
@@ -189,6 +247,7 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
                   {r.email} · {r.phone}
                 </p>
+                <ScreenshotLink url={shotFor(r)} />
                 <ReviewForm slug={slug} registrationId={r.id} ticketId={r.ticket_id} />
               </li>
             ))}
@@ -218,13 +277,14 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
                   </span>
                   <span className="text-sm text-zinc-500 dark:text-zinc-400">
                     owes {formatPaise(r.amount_due_paise)} · ref{" "}
-                    <span className="font-mono">{r.payment_claims?.[0]?.utr}</span> · submitted{" "}
+                    <span className="font-mono">{refText(r)}</span> · submitted{" "}
                     {r.payment_claims?.[0]?.created_at ? ago(r.payment_claims[0].created_at) : "—"}
                   </span>
                 </div>
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
                   {r.email} · {r.phone}
                 </p>
+                <ScreenshotLink url={shotFor(r)} />
                 <ReviewForm slug={slug} registrationId={r.id} ticketId={r.ticket_id} />
               </li>
             ))}
@@ -301,7 +361,18 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
                     </td>
                     <td className="py-2 pr-4">{formatPaise(r.amount_due_paise)}</td>
                     <td className="py-2 pr-4 font-mono text-xs">
-                      {r.payment_claims?.[0]?.utr ?? "—"}
+                      {shotFor(r) ? (
+                        <a
+                          href={shotFor(r)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-ti-blue underline dark:text-sky-400"
+                        >
+                          {refText(r)}
+                        </a>
+                      ) : (
+                        refText(r)
+                      )}
                     </td>
                     <td className="py-2">
                       <span

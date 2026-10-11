@@ -25,7 +25,9 @@ type Row = {
   status: string;
   review_note: string | null;
   created_at: string;
-  payment_claims: { utr: string; matched_at: string | null }[] | null;
+  payment_claims:
+    | { utr: string | null; app_ref: string | null; screenshot_path: string | null; matched_at: string | null }[]
+    | null;
 };
 
 const HEADER = [
@@ -47,6 +49,8 @@ const HEADER = [
   "Amount (INR)",
   "Status",
   "UPI reference",
+  "App reference",
+  "Screenshot",
   "Matched at",
   "Review note",
   "Registered at",
@@ -78,7 +82,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   const { data, error } = await db
     .from("registrations")
     .select(
-      "ticket_id, full_name, email, phone, club, area, division, meal_preference, tshirt_size, attendee_type, vehicle_type, vehicle_number, gov_id_type, gov_id_number, tier_id, amount_due_paise, status, review_note, created_at, payment_claims(utr, matched_at)",
+      "ticket_id, full_name, email, phone, club, area, division, meal_preference, tshirt_size, attendee_type, vehicle_type, vehicle_number, gov_id_type, gov_id_number, tier_id, amount_due_paise, status, review_note, created_at, payment_claims(utr, app_ref, screenshot_path, matched_at)",
     )
     .eq("event_id", event.id)
     .order("created_at", { ascending: true });
@@ -110,6 +114,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
       (r.amount_due_paise / 100).toFixed(2),
       r.status,
       claim?.utr ?? "",
+      claim?.app_ref ?? "",
+      claim?.screenshot_path ? "yes" : "",
       claim?.matched_at ?? "",
       r.review_note,
       r.created_at,

@@ -5,6 +5,7 @@ import {
   priceRegistration,
   utrSchema,
   explainBadUtr,
+  parsePaymentReference,
 } from "./registration";
 import type { PriceTier } from "./types";
 
@@ -382,5 +383,32 @@ describe("ticket choice", () => {
     expect(availableTickets(tiers, new Date("2026-09-20T10:00:00+05:30")).map((t) => t.id)).toEqual(["early"]);
     const r = priceRegistration({ tiers, registrationOpen: true }, new Date("2026-09-20T10:00:00+05:30"));
     expect(r.ok && r.priced.tierId).toBe("early");
+  });
+});
+
+describe("parsePaymentReference", () => {
+  it("treats a 12-digit number as a UTR", () => {
+    expect(parsePaymentReference(" UTR: 4123 4567 8901 ")).toEqual({ ok: true, utr: "412345678901", appRef: null });
+  });
+
+  it("allows blank, for a screenshot-only submission", () => {
+    expect(parsePaymentReference("  ")).toEqual({ ok: true, utr: null, appRef: null });
+  });
+
+  it("accepts a bank app's alphanumeric ID for a manual check", () => {
+    expect(parsePaymentReference("icia8f3k29xq71")).toEqual({ ok: true, utr: null, appRef: "ICIA8F3K29XQ71" });
+  });
+
+  it("does not mistake an alphanumeric ID holding twelve digits for a UTR", () => {
+    expect(parsePaymentReference("AB123456789012")).toEqual({ ok: true, utr: null, appRef: "AB123456789012" });
+  });
+
+  it("still refuses the Google and PhonePe IDs", () => {
+    expect(parsePaymentReference("CICAgOD1234567890")).toMatchObject({ ok: false, error: expect.stringMatching(/Google/) });
+    expect(parsePaymentReference("T2610111234567890123456")).toMatchObject({ ok: false, error: expect.stringMatching(/PhonePe/) });
+  });
+
+  it("refuses a number of the wrong length as a typo", () => {
+    expect(parsePaymentReference("41234567890")).toMatchObject({ ok: false, error: expect.stringMatching(/12 digits/) });
   });
 });

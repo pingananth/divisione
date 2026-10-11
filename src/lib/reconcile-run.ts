@@ -30,7 +30,8 @@ type PendingRow = {
   created_at: string;
   match_status: string | null;
   match_detail: string | null;
-  payment_claims: { id: string; utr: string; created_at: string }[] | null;
+  // utr is null for screenshot / app-ID claims, which matching skips.
+  payment_claims: { id: string; utr: string | null; created_at: string }[] | null;
 };
 
 type CreditRow = {
@@ -57,19 +58,20 @@ type EventRow = {
 
 /** Pending registrations that submitted a UTR, as the rules expect them. */
 export function toClaims(pending: PendingRow[], accountLast4: string): PaymentClaim[] {
-  return pending
-    .filter((p) => p.payment_claims?.[0]?.utr)
-    .map((p) => {
-      const claim = p.payment_claims![0];
-      return {
+  return pending.flatMap((p) => {
+    const claim = p.payment_claims?.[0];
+    if (!claim?.utr) return [];
+    return [
+      {
         registrationId: p.id,
         utr: claim.utr,
         expectedAmountPaise: p.amount_due_paise,
         accountLast4,
         registeredAt: p.created_at,
         claimedAt: claim.created_at,
-      };
-    });
+      },
+    ];
+  });
 }
 
 /**

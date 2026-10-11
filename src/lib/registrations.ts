@@ -14,6 +14,10 @@ export type RegistrationWithEvent = {
   status: RegistrationStatus;
   createdAt: string;
   claimedUtr: string | null;
+  /** The app's own ID, when the member had no 12-digit UTR to give. */
+  claimedAppRef: string | null;
+  /** Submitted proof of payment of any kind: UTR, app ID or screenshot. */
+  hasClaim: boolean;
   event: ReturnType<typeof toEventConfig>;
 };
 
@@ -33,7 +37,7 @@ export async function getRegistrationByTicket(
   const { data, error } = await retryRead((signal) =>
     serviceClient()
       .from("registrations")
-      .select("*, events!inner(*), payment_claims(utr)")
+      .select("*, events!inner(*), payment_claims(utr, app_ref)")
       .eq("ticket_id", ticketId)
       .eq("events.slug", slug)
       .abortSignal(signal)
@@ -45,7 +49,7 @@ export async function getRegistrationByTicket(
 
   const row = data as Record<string, unknown> & {
     events: Parameters<typeof toEventConfig>[0];
-    payment_claims: { utr: string }[] | null;
+    payment_claims: { utr: string | null; app_ref: string | null }[] | null;
   };
 
   return {
@@ -58,6 +62,8 @@ export async function getRegistrationByTicket(
     status: row.status as RegistrationStatus,
     createdAt: row.created_at as string,
     claimedUtr: row.payment_claims?.[0]?.utr ?? null,
+    claimedAppRef: row.payment_claims?.[0]?.app_ref ?? null,
+    hasClaim: (row.payment_claims?.length ?? 0) > 0,
     event: toEventConfig(row.events),
   };
 }

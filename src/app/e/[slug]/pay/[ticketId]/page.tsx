@@ -18,7 +18,7 @@ export default async function PayPage({
   if (!registration) notFound();
 
   // Already paid or already submitted a reference — nothing to do here.
-  if (registration.claimedUtr || registration.status !== "pending") {
+  if (registration.hasClaim || registration.status !== "pending") {
     redirect(`/e/${slug}/done/${ticketId}`);
   }
 

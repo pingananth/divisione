@@ -104,6 +104,9 @@ type DemoRegistration = {
   status: "pending" | "confirmed" | "rejected";
   createdAt: string;
   claimedUtr: string | null;
+  // Optional: cookies written before these existed have neither.
+  claimedAppRef?: string | null;
+  hasClaim?: boolean;
 };
 
 /**
@@ -171,19 +174,31 @@ export async function demoGetRegistration(
   ticketId: string,
 ): Promise<RegistrationWithEvent | null> {
   const reg = (await read()).find((r) => r.ticketId === ticketId);
-  return reg ? { ...reg, event: demoEvent() } : null;
+  return reg
+    ? {
+        ...reg,
+        claimedAppRef: reg.claimedAppRef ?? null,
+        hasClaim: reg.hasClaim ?? reg.claimedUtr !== null,
+        event: demoEvent(),
+      }
+    : null;
 }
 
 export type DemoClaimResult = { ok: true } | { ok: false; error: string };
 
-export async function demoSubmitUtr(ticketId: string, utr: string): Promise<DemoClaimResult> {
+/** The screenshot itself is not kept in the demo; only that one was sent. */
+export async function demoSubmitUtr(
+  ticketId: string,
+  claim: { utr: string | null; appRef: string | null },
+): Promise<DemoClaimResult> {
+  const { utr } = claim;
   const rows = await read();
   const reg = rows.find((r) => r.ticketId === ticketId);
   if (!reg) return { ok: false, error: "This registration could not be found." };
 
   // Mirror the real unique-UTR constraint, so the demo shows the same error a
   // member would actually hit.
-  if (rows.some((r) => r.ticketId !== ticketId && r.claimedUtr === utr)) {
+  if (utr && rows.some((r) => r.ticketId !== ticketId && r.claimedUtr === utr)) {
     return {
       ok: false,
       error:
@@ -193,6 +208,8 @@ export async function demoSubmitUtr(ticketId: string, utr: string): Promise<Demo
   }
 
   reg.claimedUtr = utr;
+  reg.claimedAppRef = claim.appRef;
+  reg.hasClaim = true;
   await write(rows);
   return { ok: true };
 }

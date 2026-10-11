@@ -79,10 +79,12 @@ export default async function DonePage({
             <dt className="text-zinc-500 dark:text-zinc-400">Amount</dt>
             <dd className="font-medium">{formatPaise(registration.amountDuePaise)}</dd>
           </div>
-          {registration.claimedUtr ? (
+          {registration.claimedUtr || registration.claimedAppRef ? (
             <div className="flex justify-between gap-4">
               <dt className="text-zinc-500 dark:text-zinc-400">UPI reference</dt>
-              <dd className="font-mono font-medium">{registration.claimedUtr}</dd>
+              <dd className="font-mono font-medium">
+                {registration.claimedUtr ?? registration.claimedAppRef}
+              </dd>
             </div>
           ) : null}
         </dl>
