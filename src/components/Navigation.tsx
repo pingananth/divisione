@@ -21,7 +21,7 @@ export default function Navigation() {
           {/* Logo / Brand */}
           <div className="flex-shrink-0 flex items-center">
             <Link href="/" className="font-heading font-bold text-white tracking-tight text-sm sm:text-base">
-              Division D, E & G <span className="hidden sm:inline">- Officers Training Program</span>
+              Division E <span className="hidden sm:inline">- District 229</span>
             </Link>
           </div>
 
