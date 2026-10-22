@@ -182,6 +182,29 @@ export async function reconcileAction(slug: string): Promise<ActionState> {
 }
 
 /**
+ * Turn the event's limited-time offer prices on or off. Sets the value asked
+ * for rather than flipping, so a double click cannot undo itself.
+ */
+export async function setOfferAction(slug: string, on: boolean): Promise<ActionState> {
+  const auth = await authorise(slug);
+  if ("error" in auth) return { error: auth.error };
+
+  const { error } = await serviceClient()
+    .from("events")
+    .update({ offer_active: on })
+    .eq("id", auth.event.id);
+
+  if (error) return { error: `Could not change the offer: ${error.message}` };
+
+  revalidatePath(`/admin/${slug}`);
+  return {
+    message: on
+      ? "Offer is ON. New registrations get the offer price."
+      : "Offer is OFF. New registrations pay the normal price.",
+  };
+}
+
+/**
  * Confirm or reject a registration by hand, for the exception tail that
  * reconciliation deliberately refuses to decide on its own.
  */

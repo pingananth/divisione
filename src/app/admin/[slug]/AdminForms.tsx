@@ -6,6 +6,7 @@ import {
   uploadStatementAction,
   reconcileAction,
   reviewRegistrationAction,
+  setOfferAction,
   type ActionState,
 } from "./actions";
 
@@ -75,6 +76,24 @@ export function ReconcileButton({ slug }: { slug: string }) {
   return (
     <form action={formAction}>
       <Submit idle="Match payments now" busy="Matching…" className={primaryButton} />
+      <Notice state={state} />
+    </form>
+  );
+}
+
+export function OfferSwitch({ slug, active }: { slug: string; active: boolean }) {
+  const [state, formAction] = useActionState<ActionState, FormData>(
+    async () => setOfferAction(slug, !active),
+    {},
+  );
+
+  return (
+    <form action={formAction}>
+      <Submit
+        idle={active ? "Turn offer OFF" : "Turn offer ON"}
+        busy="Saving…"
+        className={active ? secondaryButton : primaryButton}
+      />
       <Notice state={state} />
     </form>
   );

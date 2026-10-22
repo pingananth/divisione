@@ -9,8 +9,11 @@ import {
   VEHICLE_TYPES,
   OWN_VEHICLES,
   GOV_ID_TYPES,
+  DIVISIONS,
+  TM_ROLES,
+  fieldsFor,
 } from "@/lib/registration";
-import type { CustomFieldKey } from "@/lib/types";
+import type { AttendeeType, CustomFieldKey } from "@/lib/types";
 import { formatPaise } from "@/lib/pricing";
 
 const labelClass = "block text-sm font-medium text-zinc-700 dark:text-zinc-300";
@@ -124,7 +127,13 @@ export function RegistrationForm({
   slug: string;
   enabledFields: CustomFieldKey[];
   /** Tickets on sale right now. A choice is shown only when there is more than one. */
-  tickets?: { id: string; label: string; amountPaise: number; note?: string }[];
+  tickets?: {
+    id: string;
+    label: string;
+    amountPaise: number;
+    note?: string;
+    attendeeType?: AttendeeType;
+  }[];
 }) {
   const action = registerAction.bind(null, slug);
   const [state, formAction, pending] = useActionState<RegisterState, FormData>(action, {});
@@ -132,7 +141,14 @@ export function RegistrationForm({
   // Echoed values back the inputs' defaults, so the form is also correct if
   // it remounts or JavaScript is off.
   const values = state.values ?? {};
-  const has = (f: CustomFieldKey) => enabledFields.includes(f);
+
+  // The ticket — or, for a student, "Attending as" — decides whether to ask
+  // for Toastmaster details or who invited a guest. Same rule as the server.
+  const [ticketId, setTicketId] = useState(values.ticket ?? "");
+  const [attendeeChoice, setAttendeeChoice] = useState(values.attendeeType ?? "");
+  const ticket = tickets.length > 1 ? (tickets.find((t) => t.id === ticketId) ?? null) : (tickets[0] ?? {});
+  const { fields } = fieldsFor(enabledFields, ticket, attendeeChoice);
+  const has = (f: CustomFieldKey) => fields.includes(f);
   const describedBy = (name: string) => (errors[name] ? `${name}-error` : undefined);
 
   // Tracked as they change: vehicle type decides whether to ask for a plate,
@@ -177,6 +193,7 @@ export function RegistrationForm({
             hint: t.note,
           }))}
           value={values.ticket ?? ""}
+          onChange={setTicketId}
           error={errors.ticket}
           stacked
         />
@@ -231,9 +248,71 @@ export function RegistrationForm({
           name="attendeeType"
           legend="Attending as"
           options={ATTENDEE_TYPES}
-          value={values.attendeeType ?? ""}
+          value={attendeeChoice}
+          onChange={setAttendeeChoice}
           error={errors.attendeeType}
         />
+      ) : null}
+
+      {has("memberDetails") ? (
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+            <Field name="tmDivision" label="Division" error={errors.tmDivision}>
+              <select
+                id="tmDivision"
+                name="tmDivision"
+                required
+                defaultValue={values.tmDivision ?? ""}
+                aria-invalid={!!errors.tmDivision}
+                aria-describedby={describedBy("tmDivision")}
+                className={inputClass}
+              >
+                <option value="" disabled>
+                  Select…
+                </option>
+                {DIVISIONS.map((d) => (
+                  <option key={d} value={d}>
+                    Division {d}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field name="tmClub" label="Club name" error={errors.tmClub}>
+              <input
+                id="tmClub"
+                name="tmClub"
+                required
+                defaultValue={values.tmClub}
+                aria-invalid={!!errors.tmClub}
+                aria-describedby={describedBy("tmClub")}
+                className={inputClass}
+              />
+            </Field>
+          </div>
+          <Choice
+            name="tmRole"
+            legend="Role"
+            options={TM_ROLES}
+            value={values.tmRole ?? ""}
+            error={errors.tmRole}
+          />
+        </div>
+      ) : null}
+
+      {has("invitedBy") ? (
+        <Field name="invitedBy" label="Which club or who invited you?" error={errors.invitedBy}>
+          <input
+            id="invitedBy"
+            name="invitedBy"
+            required
+            maxLength={120}
+            placeholder="e.g. Chennai Speakers Club, or TM Rajan"
+            defaultValue={values.invitedBy}
+            aria-invalid={!!errors.invitedBy}
+            aria-describedby={describedBy("invitedBy")}
+            className={inputClass}
+          />
+        </Field>
       ) : null}
 
       {has("club") ? (

@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getEventBySlug } from "@/lib/events";
-import { registrationSchema, priceRegistration, FIELD_INPUTS } from "@/lib/registration";
+import { registrationSchema, priceRegistration, fieldsFor, FIELD_INPUTS } from "@/lib/registration";
 import { generateTicketId } from "@/lib/ticket";
 import { serviceClient } from "@/lib/supabase";
 import { isDemoMode } from "@/lib/demo";
@@ -26,7 +26,22 @@ export async function registerAction(
   const event = await getEventBySlug(slug);
   if (!event) return { formError: "This event could not be found." };
 
-  // Only read inputs for fields this event collects, so a tampered form body
+  // Price on the server from the event's own tiers — never from the form.
+  // The form only says which ticket was picked; its price is looked up here.
+  // Checked before the other fields so a missing ticket is reported together
+  // with every other problem, not on a second submit.
+  const ticket = String(formData.get("ticket") ?? "");
+  const pricing = priceRegistration(event, new Date(), ticket);
+
+  // The ticket (or, for a student, "Attending as") decides whether to ask for
+  // Toastmaster details or who invited a guest.
+  const { fields, attendeeType } = fieldsFor(
+    event.enabledFields,
+    pricing.ok ? { attendeeType: pricing.priced.attendeeType } : null,
+    String(formData.get("attendeeType") ?? ""),
+  );
+
+  // Only read inputs for fields this member is asked, so a tampered form body
   // cannot smuggle in values the organiser disabled.
   const raw: Record<string, string> = {
     fullName: String(formData.get("fullName") ?? ""),
@@ -34,20 +49,14 @@ export async function registerAction(
     phone: String(formData.get("phone") ?? ""),
   };
   for (const [field, inputs] of Object.entries(FIELD_INPUTS)) {
-    const on = event.enabledFields.includes(field as keyof typeof FIELD_INPUTS);
+    const on = fields.includes(field as keyof typeof FIELD_INPUTS);
     for (const input of inputs) raw[input] = on ? String(formData.get(input) ?? "") : "";
   }
 
-  // Price on the server from the event's own tiers — never from the form.
-  // The form only says which ticket was picked; its price is looked up here.
-  // Checked before the other fields so a missing ticket is reported together
-  // with every other problem, not on a second submit.
-  const ticket = String(formData.get("ticket") ?? "");
-  const pricing = priceRegistration(event, new Date(), ticket);
   const values = { ...raw, ticket };
   if (!pricing.ok && !pricing.field) return { formError: pricing.reason, values };
 
-  const parsed = registrationSchema(event.enabledFields).safeParse(raw);
+  const parsed = registrationSchema(fields).safeParse(raw);
   if (!parsed.success || !pricing.ok) {
     const errors: Record<string, string> = {};
     if (!pricing.ok) errors.ticket = pricing.reason;
@@ -90,12 +99,14 @@ export async function registerAction(
       full_name: data.fullName,
       email: data.email,
       phone: data.phone,
-      club: data.club || null,
+      club: data.tmClub || data.club || null,
       area: data.area || null,
-      division: data.division || null,
+      division: data.tmDivision || data.division || null,
       meal_preference: data.mealPreference || null,
       tshirt_size: data.tshirtSize || null,
-      attendee_type: data.attendeeType || null,
+      attendee_type: attendeeType,
+      tm_role: data.tmRole || null,
+      invited_by: data.invitedBy || null,
       vehicle_type: data.vehicleType || null,
       vehicle_number: data.vehicleNumber,
       gov_id_type: data.govIdType || null,

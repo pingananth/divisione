@@ -47,13 +47,15 @@ const demoEventRow = {
   ref_prefix: "E",
   tiers: [
     { id: "student", ticket: "student", label: "Student", amountPaise: 15000, endsAt: null, note: "Student ID card is required for approval" },
-    { id: "toastmaster-early", ticket: "toastmaster", label: "Toastmaster (early bird)", amountPaise: 25000, endsAt: "2026-10-20T23:59:59+05:30" },
-    { id: "toastmaster", ticket: "toastmaster", label: "Toastmaster", amountPaise: 30000, endsAt: null },
-    { id: "guest", ticket: "guest", label: "Guest", amountPaise: 40000, endsAt: null },
+    { id: "toastmaster", ticket: "toastmaster", label: "Toastmaster", amountPaise: 34900, endsAt: null, attendeeType: "toastmaster" as const },
+    { id: "guest", ticket: "guest", label: "Guest", amountPaise: 47900, endsAt: null, attendeeType: "guest" as const },
+    { id: "guest-offer", ticket: "guest", label: "Guest (limited offer)", amountPaise: 34900, endsAt: null, attendeeType: "guest" as const, offer: true },
   ],
-  enabled_fields: ["mealPreference", "vehicle", "governmentId"],
+  enabled_fields: ["mealPreference", "vehicle", "governmentId", "memberDetails", "invitedBy"],
   support_email: "demo@example.org",
   registration_open: true,
+  // On, so the demo shows the offer price. The switch itself needs a database.
+  offer_active: true,
   info_sections: [
     {
       heading: "Do's",

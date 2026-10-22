@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CustomFieldKey, EventConfig } from "./types";
+import type { AttendeeType, CustomFieldKey, EventConfig, PriceTier } from "./types";
 import { availableTickets } from "./pricing";
 
 /**
@@ -25,6 +25,15 @@ type Option<V extends string> = { value: V; label: string };
 export const ATTENDEE_TYPES = [
   { value: "toastmaster", label: "Toastmaster" },
   { value: "guest", label: "Guest" },
+] as const satisfies readonly Option<string>[];
+
+export const DIVISIONS = ["A", "B", "C", "D", "E", "F", "G", "H"] as const;
+
+export const TM_ROLES = [
+  { value: "district_officer", label: "District Officer" },
+  { value: "excomm", label: "Excomm" },
+  { value: "member", label: "Member" },
+  { value: "others", label: "Others" },
 ] as const satisfies readonly Option<string>[];
 
 export const VEHICLE_TYPES = [
@@ -102,7 +111,51 @@ export const FIELD_INPUTS: Record<CustomFieldKey, string[]> = {
   attendeeType: ["attendeeType"],
   vehicle: ["vehicleType", "vehicleNumber"],
   governmentId: ["govIdType", "govIdNumber"],
+  // Own input names, so they never collide with the plain club/division fields.
+  memberDetails: ["tmDivision", "tmClub", "tmRole"],
+  invitedBy: ["invitedBy"],
 };
+
+/** Fields that depend on whether the member attends as a Toastmaster or a guest. */
+const PER_ATTENDEE: Record<AttendeeType, CustomFieldKey> = {
+  toastmaster: "memberDetails",
+  guest: "invitedBy",
+};
+
+/**
+ * Work out which fields one member must fill, given the ticket they picked.
+ *
+ * Division/club/role go to Toastmasters and "who invited you" to guests. A
+ * ticket that names its attendee type settles it; one that does not (a
+ * student ticket) asks "Attending as" first. With no ticket picked yet, no
+ * per-attendee field is asked — the missing ticket is the error to show.
+ */
+export function fieldsFor(
+  enabledFields: CustomFieldKey[],
+  ticket: Pick<PriceTier, "attendeeType"> | null,
+  chosenAttendeeType?: string,
+): { fields: CustomFieldKey[]; attendeeType: AttendeeType | null } {
+  const perAttendee = Object.values(PER_ATTENDEE);
+  const asksPerAttendee = enabledFields.some((f) => perAttendee.includes(f));
+  const fields = enabledFields.filter(
+    (f) => !perAttendee.includes(f) && !(f === "attendeeType" && ticket?.attendeeType),
+  );
+
+  if (!ticket) return { fields, attendeeType: null };
+
+  if (asksPerAttendee && !ticket.attendeeType && !fields.includes("attendeeType")) {
+    fields.push("attendeeType");
+  }
+
+  const chosen = fields.includes("attendeeType")
+    ? ATTENDEE_TYPES.find((t) => t.value === chosenAttendeeType)?.value
+    : undefined;
+  const attendeeType = ticket.attendeeType ?? chosen ?? null;
+  if (attendeeType && enabledFields.includes(PER_ATTENDEE[attendeeType])) {
+    fields.push(PER_ATTENDEE[attendeeType]);
+  }
+  return { fields, attendeeType };
+}
 
 const baseSchema = z.object({
   fullName: z.string().trim().min(2, "Please enter your full name").max(120),
@@ -136,6 +189,8 @@ const FIELD_LABELS: Record<CustomFieldKey, string> = {
   attendeeType: "Attending as",
   vehicle: "How you are travelling",
   governmentId: "Government ID",
+  memberDetails: "Division",
+  invitedBy: "Club or person who invited you",
 };
 
 /** Values a field may take when the organiser has turned it on. */
@@ -148,6 +203,8 @@ const FIELD_VALUES: Record<CustomFieldKey, z.ZodType<string, string>> = {
   attendeeType: z.enum(values(ATTENDEE_TYPES)),
   vehicle: z.enum(values(VEHICLE_TYPES)),
   governmentId: z.enum(values(GOV_ID_TYPES)),
+  memberDetails: z.enum(DIVISIONS),
+  invitedBy: z.string().trim().max(120, "Please keep this under 120 characters"),
 };
 
 /**
@@ -163,8 +220,11 @@ const FIELD_VALUES: Record<CustomFieldKey, z.ZodType<string, string>> = {
 export function registrationSchema(enabledFields: CustomFieldKey[]) {
   const enabled = new Set(enabledFields);
 
-  const field = (key: CustomFieldKey): z.ZodType<string | undefined, unknown> => {
-    const label = FIELD_LABELS[key];
+  const field = (
+    key: CustomFieldKey,
+    label = FIELD_LABELS[key],
+    value = FIELD_VALUES[key],
+  ): z.ZodType<string | undefined, unknown> => {
     if (!enabled.has(key)) {
       return z
         .string()
@@ -176,7 +236,7 @@ export function registrationSchema(enabledFields: CustomFieldKey[]) {
       z
         .string({ error: `${label} is required` })
         .min(1, `${label} is required`)
-        .pipe(FIELD_VALUES[key]),
+        .pipe(value),
     );
   };
 
@@ -196,6 +256,10 @@ export function registrationSchema(enabledFields: CustomFieldKey[]) {
       mealPreference: field("mealPreference"),
       tshirtSize: field("tshirtSize"),
       attendeeType: field("attendeeType"),
+      tmDivision: field("memberDetails"),
+      tmClub: field("memberDetails", "Club name", FIELD_VALUES.club),
+      tmRole: field("memberDetails", "Role", z.enum(values(TM_ROLES))),
+      invitedBy: field("invitedBy"),
       vehicleType: field("vehicle"),
       vehicleNumber: z.string().optional(),
       govIdType: field("governmentId"),
@@ -248,6 +312,8 @@ export type PricedRegistration = {
   tierId: string;
   tierLabel: string;
   amountDuePaise: number;
+  /** Who the ticket is for, when the ticket itself says. */
+  attendeeType?: AttendeeType;
 };
 
 /**
@@ -258,7 +324,7 @@ export type PricedRegistration = {
  * cutoff cannot lock in yesterday's price.
  */
 export function priceRegistration(
-  event: Pick<EventConfig, "tiers" | "registrationOpen">,
+  event: Pick<EventConfig, "tiers" | "registrationOpen" | "offerActive">,
   at: Date = new Date(),
   /** Tier id of the ticket the member picked; ignored when there is only one. */
   chosenTierId?: string,
@@ -267,7 +333,9 @@ export function priceRegistration(
     return { ok: false, reason: "Registration for this event is closed." };
   }
 
-  const tickets = availableTickets(event.tiers, at);
+  // A tab opened while an offer was on cannot keep its price once it is off:
+  // the offer tier's id is no longer listed, so the member is asked again.
+  const tickets = availableTickets(event.tiers, at, event.offerActive);
   if (tickets.length === 0) {
     return { ok: false, reason: "Registration for this event has closed." };
   }
@@ -291,7 +359,12 @@ export function priceRegistration(
 
   return {
     ok: true,
-    priced: { tierId: tier.id, tierLabel: tier.label, amountDuePaise: tier.amountPaise },
+    priced: {
+      tierId: tier.id,
+      tierLabel: tier.label,
+      amountDuePaise: tier.amountPaise,
+      ...(tier.attendeeType ? { attendeeType: tier.attendeeType } : {}),
+    },
   };
 }
 

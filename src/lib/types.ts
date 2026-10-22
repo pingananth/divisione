@@ -20,7 +20,20 @@ export type PriceTier = {
   ticket?: string;
   /** Short condition shown under the ticket, e.g. "Student ID card required". */
   note?: string;
+  /**
+   * Who this ticket is for, which decides the details asked: Toastmasters give
+   * division, club and role; guests say who invited them. Unset (e.g. a
+   * student ticket) means the member chooses.
+   */
+  attendeeType?: AttendeeType;
+  /**
+   * A limited-time price, sold in place of its ticket's normal price only
+   * while the event's offer switch is on.
+   */
+  offer?: boolean;
 };
+
+export type AttendeeType = "toastmaster" | "guest";
 
 export type CustomFieldKey =
   | "club"
@@ -30,7 +43,11 @@ export type CustomFieldKey =
   | "tshirtSize"
   | "attendeeType"
   | "vehicle"
-  | "governmentId";
+  | "governmentId"
+  /** Toastmasters only: division, club and role. */
+  | "memberDetails"
+  /** Guests only: which club or who invited them. */
+  | "invitedBy";
 
 export type EventConfig = {
   id: string;
@@ -48,6 +65,8 @@ export type EventConfig = {
   tiers: PriceTier[];
   enabledFields: CustomFieldKey[];
   registrationOpen: boolean;
+  /** Whether tiers marked `offer` are on sale right now. */
+  offerActive?: boolean;
   /** One line under the conference name, e.g. the contest it hosts. */
   subtitle?: string | null;
   /** Intro paragraph shown above the registration form. */

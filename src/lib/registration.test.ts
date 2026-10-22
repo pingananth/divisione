@@ -6,7 +6,9 @@ import {
   utrSchema,
   explainBadUtr,
   parsePaymentReference,
+  fieldsFor,
 } from "./registration";
+import { availableTickets } from "./pricing";
 import type { PriceTier } from "./types";
 
 describe("normalisePhone", () => {
@@ -383,6 +385,100 @@ describe("ticket choice", () => {
     expect(availableTickets(tiers, new Date("2026-09-20T10:00:00+05:30")).map((t) => t.id)).toEqual(["early"]);
     const r = priceRegistration({ tiers, registrationOpen: true }, new Date("2026-09-20T10:00:00+05:30"));
     expect(r.ok && r.priced.tierId).toBe("early");
+  });
+});
+
+describe("limited-time offer", () => {
+  const tiers: PriceTier[] = [
+    { id: "toastmaster", ticket: "toastmaster", label: "Toastmaster", amountPaise: 34900, endsAt: null, attendeeType: "toastmaster" },
+    { id: "guest", ticket: "guest", label: "Guest", amountPaise: 47900, endsAt: null, attendeeType: "guest" },
+    { id: "guest-offer", ticket: "guest", label: "Guest (limited offer)", amountPaise: 34900, endsAt: null, attendeeType: "guest", offer: true },
+  ];
+  const open = (offerActive: boolean) => ({ tiers, registrationOpen: true, offerActive });
+
+  it("sells the normal guest price while the offer is off", () => {
+    expect(availableTickets(tiers, new Date(), false).map((t) => t.id)).toEqual(["toastmaster", "guest"]);
+    const r = priceRegistration(open(false), new Date(), "guest");
+    expect(r.ok && r.priced.amountDuePaise).toBe(47900);
+  });
+
+  it("sells the offer price in its place while the offer is on", () => {
+    expect(availableTickets(tiers, new Date(), true).map((t) => t.id)).toEqual(["toastmaster", "guest-offer"]);
+    const r = priceRegistration(open(true), new Date(), "guest-offer");
+    expect(r.ok && r.priced.amountDuePaise).toBe(34900);
+  });
+
+  it("refuses the offer price from a page left open after the offer ended", () => {
+    const r = priceRegistration(open(false), new Date(), "guest-offer");
+    expect(r).toMatchObject({ ok: false, field: "ticket" });
+  });
+
+  it("refuses the normal guest tier while the offer is on, so nobody overpays from a stale page", () => {
+    expect(priceRegistration(open(true), new Date(), "guest")).toMatchObject({ ok: false, field: "ticket" });
+  });
+
+  it("says who the ticket is for", () => {
+    const r = priceRegistration(open(false), new Date(), "toastmaster");
+    expect(r.ok && r.priced.attendeeType).toBe("toastmaster");
+  });
+});
+
+describe("Toastmaster and guest details", () => {
+  const enabled = ["mealPreference", "memberDetails", "invitedBy"] as const;
+  const base = { fullName: "Asha Rao", email: "asha@example.com", phone: "9876543210", mealPreference: "Vegetarian" };
+  const tm = { tmDivision: "E", tmClub: "Chennai Speakers", tmRole: "excomm" };
+
+  const errorsFor = (ticket: Pick<PriceTier, "attendeeType"> | null, input: object, chosen?: string) => {
+    const { fields } = fieldsFor([...enabled], ticket, chosen);
+    const r = registrationSchema(fields).safeParse({ ...base, ...input });
+    return r.success ? {} : Object.fromEntries(r.error.issues.map((i) => [String(i.path[0]), i.message]));
+  };
+
+  it("asks a Toastmaster for division, club and role, all in one submit", () => {
+    expect(Object.keys(errorsFor({ attendeeType: "toastmaster" }, {})).sort()).toEqual(["tmClub", "tmDivision", "tmRole"]);
+    expect(errorsFor({ attendeeType: "toastmaster" }, tm)).toEqual({});
+  });
+
+  it("only accepts divisions A to H and the listed roles", () => {
+    expect(errorsFor({ attendeeType: "toastmaster" }, { ...tm, tmDivision: "Z" }).tmDivision).toBeDefined();
+    expect(errorsFor({ attendeeType: "toastmaster" }, { ...tm, tmRole: "president" }).tmRole).toBeDefined();
+  });
+
+  it("does not ask a Toastmaster who invited them, and refuses one if sent", () => {
+    expect(errorsFor({ attendeeType: "toastmaster" }, { ...tm, invitedBy: "TM Rajan" }).invitedBy).toMatch(/not collected/);
+  });
+
+  it("asks a guest who invited them, and nothing about division or club", () => {
+    expect(errorsFor({ attendeeType: "guest" }, {})).toEqual({
+      invitedBy: "Club or person who invited you is required",
+    });
+    expect(errorsFor({ attendeeType: "guest" }, { invitedBy: "Chennai Speakers" })).toEqual({});
+    expect(errorsFor({ attendeeType: "guest" }, { invitedBy: "x", tmClub: "Chennai Speakers" }).tmClub).toBeDefined();
+  });
+
+  it("asks a student whether they attend as a Toastmaster or a guest first", () => {
+    expect(Object.keys(errorsFor({}, {}))).toEqual(["attendeeType"]);
+  });
+
+  it("then asks the student the details for what they chose", () => {
+    expect(Object.keys(errorsFor({}, { attendeeType: "toastmaster" }, "toastmaster")).sort()).toEqual(
+      ["tmClub", "tmDivision", "tmRole"],
+    );
+    expect(Object.keys(errorsFor({}, { attendeeType: "guest" }, "guest"))).toEqual(["invitedBy"]);
+  });
+
+  it("asks nothing per-attendee until a ticket is picked", () => {
+    expect(errorsFor(null, {})).toEqual({});
+  });
+
+  it("reports the attendee type the ticket or the student settled on", () => {
+    expect(fieldsFor([...enabled], { attendeeType: "guest" }).attendeeType).toBe("guest");
+    expect(fieldsFor([...enabled], {}, "toastmaster").attendeeType).toBe("toastmaster");
+    expect(fieldsFor([...enabled], {}, "vip").attendeeType).toBeNull();
+  });
+
+  it("leaves events without these fields exactly as before", () => {
+    expect(fieldsFor(["club", "mealPreference"], {}).fields).toEqual(["club", "mealPreference"]);
   });
 });
 

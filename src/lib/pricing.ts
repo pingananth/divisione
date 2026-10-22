@@ -33,8 +33,15 @@ export function selectTier(tiers: PriceTier[], at: Date = new Date()): PriceTier
  * Tickets a member can choose from right now: one price per ticket, picked by
  * `selectTier` among that ticket's tiers. Order follows the first appearance
  * of each ticket in the list, so organisers control the order shown.
+ *
+ * Tiers marked `offer` are skipped unless `offerActive`; while it is, a
+ * ticket's offer tier replaces its normal price.
  */
-export function availableTickets(tiers: PriceTier[], at: Date = new Date()): PriceTier[] {
+export function availableTickets(
+  tiers: PriceTier[],
+  at: Date = new Date(),
+  offerActive = false,
+): PriceTier[] {
   const groups = new Map<string, PriceTier[]>();
   for (const tier of tiers) {
     const key = tier.ticket ?? "";
@@ -44,7 +51,8 @@ export function availableTickets(tiers: PriceTier[], at: Date = new Date()): Pri
   }
   const out: PriceTier[] = [];
   for (const group of groups.values()) {
-    const tier = selectTier(group, at);
+    const offer = offerActive ? selectTier(group.filter((t) => t.offer), at) : null;
+    const tier = offer ?? selectTier(group.filter((t) => !t.offer), at);
     if (tier) out.push(tier);
   }
   return out;

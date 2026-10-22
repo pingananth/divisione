@@ -31,11 +31,12 @@ select
   -- ASSUMED ₹300 (30000 paise). Change if the fee is different.
   $json$[{"id":"regular","label":"Registration","amountPaise":30000,"endsAt":null}]$json$::jsonb,
 
-  -- Every field listed here is mandatory. Club, area, division and T-shirt
-  -- size are not collected for this event.
-  -- 'Attending as' is not asked: the ticket (Student / Toastmaster / Guest)
-  -- already says it. Tickets are set in exuberance-26-tickets.sql.
-  array['mealPreference','vehicle','governmentId'],
+  -- Every field listed here is mandatory. Area and T-shirt size are not
+  -- collected for this event.
+  -- 'memberDetails' (division, club, role) is asked of Toastmasters and
+  -- 'invitedBy' of guests; the ticket decides which, and students choose.
+  -- Tickets are set in exuberance-26-tickets.sql. Run migration 0007 first.
+  array['mealPreference','vehicle','governmentId','memberDetails','invitedBy'],
 
   $json$[
     {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase-server";
 import { csvDocument } from "@/lib/csv-export";
-import { optionLabel, ATTENDEE_TYPES, VEHICLE_TYPES, GOV_ID_TYPES } from "@/lib/registration";
+import { optionLabel, ATTENDEE_TYPES, TM_ROLES, VEHICLE_TYPES, GOV_ID_TYPES } from "@/lib/registration";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +16,8 @@ type Row = {
   meal_preference: string | null;
   tshirt_size: string | null;
   attendee_type: string | null;
+  tm_role: string | null;
+  invited_by: string | null;
   vehicle_type: string | null;
   vehicle_number: string | null;
   gov_id_type: string | null;
@@ -41,6 +43,8 @@ const HEADER = [
   "Meal",
   "T-shirt",
   "Attending as",
+  "Role",
+  "Invited by",
   "Travelling by",
   "Vehicle number",
   "ID type",
@@ -82,7 +86,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   const { data, error } = await db
     .from("registrations")
     .select(
-      "ticket_id, full_name, email, phone, club, area, division, meal_preference, tshirt_size, attendee_type, vehicle_type, vehicle_number, gov_id_type, gov_id_number, tier_id, amount_due_paise, status, review_note, created_at, payment_claims(utr, app_ref, screenshot_path, matched_at)",
+      "ticket_id, full_name, email, phone, club, area, division, meal_preference, tshirt_size, attendee_type, tm_role, invited_by, vehicle_type, vehicle_number, gov_id_type, gov_id_number, tier_id, amount_due_paise, status, review_note, created_at, payment_claims(utr, app_ref, screenshot_path, matched_at)",
     )
     .eq("event_id", event.id)
     .order("created_at", { ascending: true });
@@ -106,6 +110,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
       r.meal_preference,
       r.tshirt_size,
       optionLabel(ATTENDEE_TYPES, r.attendee_type),
+      optionLabel(TM_ROLES, r.tm_role),
+      r.invited_by,
       optionLabel(VEHICLE_TYPES, r.vehicle_type),
       r.vehicle_number,
       optionLabel(GOV_ID_TYPES, r.gov_id_type),

@@ -41,7 +41,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const event = await getEventBySlug(slug);
   if (!event) notFound();
 
-  const tickets = availableTickets(event.tiers);
+  const tickets = availableTickets(event.tiers, new Date(), event.offerActive);
   const closed = !event.registrationOpen || tickets.length === 0;
   const cheapest = Math.min(...tickets.map((t) => t.amountPaise));
   const venueLines =
@@ -197,7 +197,13 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             <RegistrationForm
               slug={slug}
               enabledFields={event.enabledFields}
-              tickets={tickets.map((t) => ({ id: t.id, label: t.label, amountPaise: t.amountPaise, note: t.note }))}
+              tickets={tickets.map((t) => ({
+                id: t.id,
+                label: t.label,
+                amountPaise: t.amountPaise,
+                note: t.note,
+                attendeeType: t.attendeeType,
+              }))}
             />
           </>
         )}

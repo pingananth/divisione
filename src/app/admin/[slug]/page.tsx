@@ -3,13 +3,14 @@ import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase-server";
 import { isDemoMode } from "@/lib/demo";
 import { DemoAdminNotice } from "@/components/DemoAdminNotice";
-import { formatPaise } from "@/lib/pricing";
+import { availableTickets, formatPaise } from "@/lib/pricing";
 import { REVIEW_KINDS, type OutcomeKind } from "@/lib/reconcile";
-import { optionLabel, ATTENDEE_TYPES } from "@/lib/registration";
+import { optionLabel, ATTENDEE_TYPES, TM_ROLES } from "@/lib/registration";
+import type { PriceTier } from "@/lib/types";
 import { formatEventDate } from "@/lib/events";
 import { serviceClient } from "@/lib/supabase";
 import { SCREENSHOT_BUCKET, SCREENSHOT_LINK_SECONDS } from "@/lib/screenshots";
-import { UploadStatementForm, ReconcileButton, ReviewForm } from "./AdminForms";
+import { UploadStatementForm, ReconcileButton, ReviewForm, OfferSwitch } from "./AdminForms";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,10 @@ type RegistrationRow = {
   email: string;
   phone: string;
   club: string | null;
+  division: string | null;
   attendee_type: string | null;
+  tm_role: string | null;
+  invited_by: string | null;
   tier_id: string;
   amount_due_paise: number;
   status: "pending" | "confirmed" | "rejected";
@@ -102,7 +106,7 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
   // RLS returns nothing unless this organiser runs this event.
   const { data: event, error: eventError } = await db
     .from("events")
-    .select("id, title, venue, starts_at, upi_vpa, registration_open, account_last4, tiers")
+    .select("id, title, venue, starts_at, upi_vpa, registration_open, account_last4, tiers, offer_active")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -113,7 +117,7 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
     db
       .from("registrations")
       .select(
-        "id, ticket_id, full_name, email, phone, club, attendee_type, tier_id, amount_due_paise, status, review_note, created_at, match_status, match_detail, payment_claims(utr, app_ref, screenshot_path, matched_at, created_at)",
+        "id, ticket_id, full_name, email, phone, club, division, attendee_type, tm_role, invited_by, tier_id, amount_due_paise, status, review_note, created_at, match_status, match_detail, payment_claims(utr, app_ref, screenshot_path, matched_at, created_at)",
       )
       .eq("event_id", event.id)
       .order("created_at", { ascending: false }),
@@ -161,8 +165,13 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
     const path = claimOf(r)?.screenshot_path;
     return path ? screenshotUrl.get(path) : undefined;
   };
-  const ticketLabel = new Map(
-    ((event.tiers ?? []) as { id: string; label: string }[]).map((t) => [t.id, t.label]),
+  const tiers = (event.tiers ?? []) as PriceTier[];
+  const ticketLabel = new Map(tiers.map((t) => [t.id, t.label]));
+  const offerActive = !!event.offer_active;
+  // Prices on sale now, so the switch shows exactly what members will see.
+  const offerTickets = new Set(tiers.filter((t) => t.offer).map((t) => t.ticket ?? ""));
+  const onSale = availableTickets(tiers, new Date(), offerActive).filter((t) =>
+    offerTickets.has(t.ticket ?? ""),
   );
   const collectedPaise = confirmed.reduce((sum, r) => sum + r.amount_due_paise, 0);
 
@@ -199,6 +208,27 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
         <Stat label="Not paid yet" value={String(awaitingPayment.length)} />
         <Stat label="Collected" value={formatPaise(collectedPaise)} />
       </section>
+
+      {offerTickets.size > 0 ? (
+        <section className="mt-6 rounded-2xl bg-white ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700 p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold">
+                Limited offer:{" "}
+                <span className={offerActive ? "text-emerald-700 dark:text-emerald-300" : "text-zinc-500 dark:text-zinc-400"}>
+                  {offerActive ? "ON" : "OFF"}
+                </span>
+              </h2>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                On sale now:{" "}
+                {onSale.map((t) => `${t.label} ${formatPaise(t.amountPaise)}`).join(" · ") || "—"}.
+                Applies to new registrations only.
+              </p>
+            </div>
+            <OfferSwitch slug={slug} active={offerActive} />
+          </div>
+        </section>
+      ) : null}
 
       <section className="mt-6 rounded-2xl bg-white ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700 p-6 shadow-sm">
         <h2 className="text-lg font-semibold">Payments</h2>
@@ -354,7 +384,21 @@ export default async function EventAdminPage({ params }: { params: Promise<{ slu
                       <span className="block text-xs text-zinc-500 dark:text-zinc-400">{r.email}</span>
                     </td>
                     <td className="py-2 pr-4 text-zinc-600 dark:text-zinc-300">
-                      {r.club ?? (r.attendee_type ? optionLabel(ATTENDEE_TYPES, r.attendee_type) : "—")}
+                      <span className="block">
+                        {r.club ?? (r.attendee_type ? optionLabel(ATTENDEE_TYPES, r.attendee_type) : "—")}
+                      </span>
+                      {r.division || r.tm_role ? (
+                        <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+                          {[r.division ? `Div ${r.division}` : "", optionLabel(TM_ROLES, r.tm_role)]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      ) : null}
+                      {r.invited_by ? (
+                        <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+                          Invited by {r.invited_by}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="py-2 pr-4 text-zinc-600 dark:text-zinc-300">
                       {ticketLabel.get(r.tier_id) ?? r.tier_id}
