@@ -15,6 +15,7 @@ import {
 } from "@/lib/registration";
 import type { AttendeeType, CustomFieldKey } from "@/lib/types";
 import { formatPaise } from "@/lib/pricing";
+import { ClubCombobox } from "@/components/ClubCombobox";
 
 const labelClass = "block text-sm font-medium text-zinc-700 dark:text-zinc-300";
 const inputClass =
@@ -157,6 +158,7 @@ export function RegistrationForm({
   const [vehicleType, setVehicleType] = useState(values.vehicleType ?? "");
   const [govIdType, setGovIdType] = useState(values.govIdType ?? "");
   const [tshirtSize, setTshirtSize] = useState(values.tshirtSize ?? "");
+  const [tmDivision, setTmDivision] = useState(values.tmDivision ?? "");
 
   const ownVehicle = OWN_VEHICLES.includes(vehicleType);
   const idPlaceholder = GOV_ID_TYPES.find((t) => t.value === govIdType)?.placeholder;
@@ -262,7 +264,8 @@ export function RegistrationForm({
                 id="tmDivision"
                 name="tmDivision"
                 required
-                defaultValue={values.tmDivision ?? ""}
+                value={tmDivision}
+                onChange={(e) => setTmDivision(e.target.value)}
                 aria-invalid={!!errors.tmDivision}
                 aria-describedby={describedBy("tmDivision")}
                 className={inputClass}
@@ -278,14 +281,15 @@ export function RegistrationForm({
               </select>
             </Field>
             <Field name="tmClub" label="Club name" error={errors.tmClub}>
-              <input
+              <ClubCombobox
                 id="tmClub"
                 name="tmClub"
-                required
                 defaultValue={values.tmClub}
-                aria-invalid={!!errors.tmClub}
-                aria-describedby={describedBy("tmClub")}
+                invalid={!!errors.tmClub}
+                describedBy={describedBy("tmClub")}
                 className={inputClass}
+                // A listed club's division is known; fill it in unless already chosen.
+                onPick={(club) => setTmDivision((d) => d || club.division)}
               />
             </Field>
           </div>
