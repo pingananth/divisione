@@ -124,9 +124,12 @@ export function RegistrationForm({
   slug,
   enabledFields,
   tickets = [],
+  prefill,
 }: {
   slug: string;
   enabledFields: CustomFieldKey[];
+  /** Starting values from a shared link, e.g. ticket and who invited them. */
+  prefill?: Record<string, string>;
   /** Tickets on sale right now. A choice is shown only when there is more than one. */
   tickets?: {
     id: string;
@@ -140,8 +143,9 @@ export function RegistrationForm({
   const [state, formAction, pending] = useActionState<RegisterState, FormData>(action, {});
   const errors = state.errors ?? {};
   // Echoed values back the inputs' defaults, so the form is also correct if
-  // it remounts or JavaScript is off.
-  const values = state.values ?? {};
+  // it remounts or JavaScript is off. Before the first submit, a shared link's
+  // starting values stand in for them.
+  const values = state.values ?? prefill ?? {};
 
   // The ticket — or, for a student, "Attending as" — decides whether to ask
   // for Toastmaster details or who invited a guest. Same rule as the server.

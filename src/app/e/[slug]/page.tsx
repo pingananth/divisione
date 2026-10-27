@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { CalendarDays, CircleCheck, CircleX, Clock, Info, MapPin, Phone } from "lucide-react";
 import { getEventBySlug, formatEventDay, formatEventTime, formatPhone } from "@/lib/events";
 import { availableTickets, formatPaise } from "@/lib/pricing";
+import { prefillFromQuery } from "@/lib/prefill";
 import type { InfoSection } from "@/lib/types";
 import { RegistrationForm } from "./RegistrationForm";
 
@@ -36,12 +37,21 @@ function Fact({
   );
 }
 
-export default async function EventPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function EventPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { slug } = await params;
   const event = await getEventBySlug(slug);
   if (!event) notFound();
 
   const tickets = availableTickets(event.tiers, new Date(), event.offerActive);
+  // A shared link (e.g. an ad's QR code) can pre-select a ticket and pre-fill
+  // who invited them: ?type=guest&ref=mall-campaign
+  const prefill = prefillFromQuery(tickets, await searchParams);
   const closed = !event.registrationOpen || tickets.length === 0;
   const cheapest = Math.min(...tickets.map((t) => t.amountPaise));
   const venueLines =
@@ -197,6 +207,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             <RegistrationForm
               slug={slug}
               enabledFields={event.enabledFields}
+              prefill={prefill}
               tickets={tickets.map((t) => ({
                 id: t.id,
                 label: t.label,
