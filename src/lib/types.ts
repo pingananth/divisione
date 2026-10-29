@@ -67,6 +67,8 @@ export type EventConfig = {
   registrationOpen: boolean;
   /** Whether tiers marked `offer` are on sale right now. */
   offerActive?: boolean;
+  /** Shown at the top of the page once registration is closed, e.g. why. */
+  closedMessage?: string | null;
   /** One line under the conference name, e.g. the contest it hosts. */
   subtitle?: string | null;
   /** Intro paragraph shown above the registration form. */

@@ -19,6 +19,7 @@ type EventRow = {
   support_email: string;
   registration_open: boolean;
   offer_active?: boolean;
+  closed_message?: string | null;
   subtitle?: string | null;
   description?: string | null;
   info_sections?: unknown;
@@ -91,6 +92,7 @@ export function toEventConfig(row: EventRow): EventConfig & { supportEmail: stri
     enabledFields: (row.enabled_fields ?? []) as CustomFieldKey[],
     registrationOpen: row.registration_open,
     offerActive: row.offer_active ?? false,
+    closedMessage: row.closed_message ?? null,
     supportEmail: row.support_email,
     subtitle: row.subtitle ?? null,
     description: row.description ?? null,

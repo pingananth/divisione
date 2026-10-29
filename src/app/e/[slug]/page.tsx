@@ -105,6 +105,32 @@ export default async function EventPage({
         </dl>
       </header>
 
+      {/* Closed: say so first, before anyone reads the details below. Members
+          who already registered still use their payment link, so this only
+          stops new sign-ups. */}
+      {closed ? (
+        <section
+          className="mt-8 rounded-2xl bg-amber-50 p-6 ring-1 ring-amber-200 sm:p-8 dark:bg-amber-950/40 dark:ring-amber-800"
+          aria-labelledby="closed-heading"
+          id="register"
+        >
+          <h2 id="closed-heading" className="text-xl font-bold text-amber-900 dark:text-amber-100">
+            Registrations are closed
+          </h2>
+          <p className="mt-2 leading-relaxed text-amber-900 dark:text-amber-100">
+            {event.closedMessage ?? "Registration for this conference is no longer open."}
+          </p>
+          <p className="mt-3 text-sm text-amber-800 dark:text-amber-200">
+            Already registered? Your registration still stands — use the payment link from your
+            email to finish or check it, or contact{" "}
+            <a className="font-medium underline" href={`mailto:${event.supportEmail}`}>
+              {event.supportEmail}
+            </a>
+            .
+          </p>
+        </section>
+      ) : null}
+
 
       {sections.length > 0 ? (
         <section className="mt-8" aria-labelledby="guidelines-heading">
@@ -167,19 +193,8 @@ export default async function EventPage({
 
       {/* Form goes last: once members start it and press Continue they move
           on to payment and never scroll back for the details above. */}
-      <section className={`mt-8 ${card}`} aria-label="Registration" id="register">
-        {closed ? (
-          <div>
-            <h2 className="text-lg font-semibold">Registration is closed</h2>
-            <p className="mt-2 text-zinc-600 dark:text-zinc-300">
-              Registration for this conference is no longer open. Please contact{" "}
-              <a className="text-ti-blue underline" href={`mailto:${event.supportEmail}`}>
-                {event.supportEmail}
-              </a>{" "}
-              if you think this is a mistake.
-            </p>
-          </div>
-        ) : (
+      {closed ? null : (
+        <section className={`mt-8 ${card}`} aria-label="Registration" id="register">
           <>
             <div className="mb-6 flex items-baseline justify-between border-b border-zinc-200 pb-4 dark:border-zinc-700">
               <div>
@@ -217,8 +232,8 @@ export default async function EventPage({
               }))}
             />
           </>
-        )}
-      </section>
+        </section>
+      )}
     </main>
   );
 }
